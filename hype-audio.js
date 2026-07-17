@@ -37,7 +37,8 @@
     filter = filter || {};
     const pool = listClips().filter((c) =>
       (!filter.mentality || c.mentality === filter.mentality) &&
-      (!filter.moment || c.moment === filter.moment)
+      (!filter.moment || c.moment === filter.moment) &&
+      (!filter.pillar || c.pillar === filter.pillar)
     );
     if (pool.length === 0) return null;
     return pool[Math.floor(Math.random() * pool.length)];

@@ -24,9 +24,9 @@
     btn.textContent = '🔥 HYPE ME UP';
     btn.onclick = function () {
       if (!window.HypeAudio) return;
-      const clip = window.HypeAudio.pickRandom({});
+      const clip = window.HypeAudio.pickRandom({ pillar: 'iron' });
       if (!clip) {
-        alert('No clips yet — add some from the hype-audio app.');
+        alert('No iron clips yet — add some from the hype-audio app.');
         return;
       }
       window.HypeAudio.playClip(clip);

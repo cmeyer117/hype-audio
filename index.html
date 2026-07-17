@@ -12,15 +12,31 @@
   .clip button { margin-left: 6px; }
   form { background: #1c1c1c; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
   input, select { display: block; width: 100%; margin-bottom: 8px; padding: 8px; box-sizing: border-box; }
+  .pillar-play { display: flex; gap: 8px; margin-bottom: 16px; }
+  .pillar-play button { flex: 1; padding: 14px; font-weight: 700; font-size: 14px; border: none; border-radius: 8px; color: #fff; cursor: pointer; }
+  #play-iron { background: #d81e1e; }
+  #play-faith { background: #b8912f; }
+  .filter-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
+  .filter-toggle button { flex: 1; padding: 6px; background: #1c1c1c; color: #aaa; border: 1px solid #333; border-radius: 6px; cursor: pointer; }
+  .filter-toggle button.active { background: #333; color: #fff; }
 </style>
 </head>
 <body>
   <h1>Hype Audio Library</h1>
 
+  <div class="pillar-play">
+    <button id="play-iron" type="button">🔥 IRON</button>
+    <button id="play-faith" type="button">✝️ FAITH</button>
+  </div>
+
   <form id="upload-form">
     <input type="file" id="file-input" accept="audio/*" required>
     <input type="text" id="title-input" placeholder="Title" required>
     <input type="text" id="mentality-input" placeholder="Mentality (e.g. goggins, dorian, original)" required>
+    <select id="pillar-input" required>
+      <option value="iron">Iron</option>
+      <option value="faith">Faith</option>
+    </select>
     <select id="moment-input">
       <option value="pre_workout">Pre-workout</option>
       <option value="mid_set">Mid-set</option>
@@ -33,6 +49,12 @@
     </select>
     <button type="submit">Upload</button>
   </form>
+
+  <div class="filter-toggle">
+    <button type="button" class="filter-btn active" data-filter="">All</button>
+    <button type="button" class="filter-btn" data-filter="iron">Iron</button>
+    <button type="button" class="filter-btn" data-filter="faith">Faith</button>
+  </div>
 
   <div id="clip-list"></div>
 
@@ -54,13 +76,17 @@
       onApplied: function () { render(); },
     });
 
+    let currentFilter = '';
+
     function render() {
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
-      HypeAudio.listClips().forEach(function (clip) {
+      HypeAudio.listClips()
+        .filter(function (c) { return !currentFilter || c.pillar === currentFilter; })
+        .forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
-        row.innerHTML = '<span>' + clip.title + ' — ' + clip.mentality + ' / ' + clip.moment +
+        row.innerHTML = '<span>' + clip.title + ' — ' + (clip.pillar || 'unset') + ' / ' + clip.mentality + ' / ' + clip.moment +
           ' (played ' + (clip.play_count || 0) + 'x)</span>';
         const playBtn = document.createElement('button');
         playBtn.textContent = 'Play';
@@ -74,6 +100,24 @@
       });
     }
 
+    document.querySelectorAll('.filter-btn').forEach(function (btn) {
+      btn.onclick = function () {
+        currentFilter = btn.dataset.filter;
+        document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        render();
+      };
+    });
+
+    function playPillar(pillar) {
+      const clip = HypeAudio.pickRandom({ pillar: pillar });
+      if (!clip) { alert('No ' + pillar + ' clips yet — upload some below.'); return; }
+      HypeAudio.playClip(clip);
+      render();
+    }
+    document.getElementById('play-iron').onclick = function () { playPillar('iron'); };
+    document.getElementById('play-faith').onclick = function () { playPillar('faith'); };
+
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       const file = document.getElementById('file-input').files[0];
@@ -83,6 +127,7 @@
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
         title: document.getElementById('title-input').value,
         mentality: document.getElementById('mentality-input').value,
+        pillar: document.getElementById('pillar-input').value,
         moment: document.getElementById('moment-input').value,
         source_type: document.getElementById('source-input').value,
         storage_url: url,

@@ -29,13 +29,30 @@
     saveClips(clips);
   }
 
+  // Soft-delete: mark instead of remove. A plain removal would make the
+  // clip disappear from this device's array but not the shared one, and
+  // the cloud-sync merge (sync.js's mergeArrays) can't tell "never synced
+  // this clip" apart from "deleted this clip" once it's just gone — it
+  // would add the clip back on the next merge from another device/tab
+  // that still has it. A tombstone is data, so it survives the merge and
+  // propagates the delete instead of getting merged away.
+  // ponytail: tombstones are never pruned — fine at solo-user clip-count
+  // scale, add pruning (drop tombstones older than N days) if the list grows.
   function deleteClip(id) {
-    saveClips(listClips().filter((c) => c.id !== id));
+    const clips = listClips();
+    const idx = clips.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    clips[idx] = Object.assign({}, clips[idx], { deleted: true, deleted_at: Date.now() });
+    saveClips(clips);
+  }
+
+  function listActiveClips() {
+    return listClips().filter((c) => !c.deleted);
   }
 
   function pickRandom(filter) {
     filter = filter || {};
-    const pool = listClips().filter((c) =>
+    const pool = listActiveClips().filter((c) =>
       (!filter.mentality || c.mentality === filter.mentality) &&
       (!filter.moment || c.moment === filter.moment) &&
       (!filter.pillar || c.pillar === filter.pillar)
@@ -62,13 +79,26 @@
     return data ? data.publicUrl : null;
   }
 
-  window.HypeAudio = {
-    listClips: listClips,
-    addClip: addClip,
-    updateClip: updateClip,
-    deleteClip: deleteClip,
-    pickRandom: pickRandom,
-    playClip: playClip,
-    uploadClipFile: uploadClipFile,
-  };
+  if (typeof window !== 'undefined') {
+    window.HypeAudio = {
+      listClips: listClips,
+      listActiveClips: listActiveClips,
+      addClip: addClip,
+      updateClip: updateClip,
+      deleteClip: deleteClip,
+      pickRandom: pickRandom,
+      playClip: playClip,
+      uploadClipFile: uploadClipFile,
+    };
+  }
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      listClips: listClips,
+      listActiveClips: listActiveClips,
+      addClip: addClip,
+      updateClip: updateClip,
+      deleteClip: deleteClip,
+      pickRandom: pickRandom,
+    };
+  }
 })();

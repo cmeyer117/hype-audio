@@ -54,6 +54,20 @@
       origRemove(k);
       try { if (!suppressSync && matches(k)) schedulePush(); } catch (e) {}
     };
+    function mergeArrays(remoteArr, localArr) {
+      const byKey = new Map();
+      for (const entry of [...remoteArr, ...localArr]) {
+        const key = entry && typeof entry === 'object' && 'id' in entry ? entry.id : JSON.stringify(entry);
+        const existing = byKey.get(key);
+        // First-seen wins (remote preferred), except a tombstone (entry.deleted)
+        // always wins over a non-tombstoned duplicate — a delete that hasn't
+        // round-tripped to this side yet shouldn't get merged away.
+        if (!existing || (entry && entry.deleted && !(existing && existing.deleted))) {
+          byKey.set(key, entry);
+        }
+      }
+      return Array.from(byKey.values());
+    }
     function applyRemote(remote) {
       if (!remote || typeof remote !== 'object') return false;
       suppressSync = true;
@@ -61,12 +75,15 @@
       try {
         for (const k of Object.keys(remote)) {
           if (!matches(k)) continue;
-          const incoming = JSON.stringify(remote[k]);
+          let incomingValue = remote[k];
+          if (Array.isArray(incomingValue)) {
+            let localValue = [];
+            try { localValue = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) {}
+            if (Array.isArray(localValue)) incomingValue = mergeArrays(incomingValue, localValue);
+          }
+          const incoming = JSON.stringify(incomingValue);
           const local = localStorage.getItem(k);
           if (local !== incoming) { try { origSet(k, incoming); changed = true; } catch (e) {} }
-        }
-        for (const k of listAllKeys()) {
-          if (!(k in remote)) { try { origRemove(k); changed = true; } catch (e) {} }
         }
       } finally { suppressSync = false; }
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }

@@ -81,7 +81,7 @@
     function render() {
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
-      HypeAudio.listClips()
+      HypeAudio.listActiveClips()
         .filter(function (c) { return !currentFilter || c.pillar === currentFilter; })
         .forEach(function (clip) {
         const row = document.createElement('div');

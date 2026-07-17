@@ -4,52 +4,116 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hype Audio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: -apple-system, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; }
-  h1 { font-size: 20px; }
-  .clip { display: flex; align-items: center; justify-content: space-between;
-    background: #1c1c1c; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
-  .clip button { margin-left: 6px; }
-  form { background: #1c1c1c; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
-  input, select { display: block; width: 100%; margin-bottom: 8px; padding: 8px; box-sizing: border-box; }
-  .pillar-play { display: flex; gap: 8px; margin-bottom: 16px; }
-  .pillar-play button { flex: 1; padding: 14px; font-weight: 700; font-size: 14px; border: none; border-radius: 8px; color: #fff; cursor: pointer; }
-  #play-iron { background: #d81e1e; }
-  #play-faith { background: #b8912f; }
-  .filter-toggle { display: flex; gap: 6px; margin-bottom: 10px; }
-  .filter-toggle button { flex: 1; padding: 6px; background: #1c1c1c; color: #aaa; border: 1px solid #333; border-radius: 6px; cursor: pointer; }
-  .filter-toggle button.active { background: #333; color: #fff; }
+  :root {
+    --text-primary: #F4F1EA; --text-secondary: #B8B6B0; --text-tertiary: #76746E;
+    --iron: #E0332F; --faith: #C9A227; --danger: #FF6B6B;
+    --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #000; color: var(--text-secondary); font-family: var(--font); }
+  body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 20px 60px; }
+  .page { max-width: 640px; margin: 0 auto; }
+  .dash-title { margin: 0 0 22px; font-family: var(--font-serif); font-size: 30px; font-weight: 700; font-style: italic; color: var(--text-primary); }
+
+  .pillar-play { display: flex; gap: 10px; margin-bottom: 26px; }
+  .pillar-play button {
+    flex: 1; padding: 16px; font-family: var(--font); font-weight: 700; font-size: 14px; letter-spacing: .04em;
+    border: 0; border-radius: 12px; color: #0a0a0a; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: transform .08s ease, filter .15s ease;
+  }
+  .pillar-play button:active { transform: scale(.97); }
+  #play-iron { background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%); }
+  #play-faith { background: linear-gradient(135deg, #E0BC4A 0%, var(--faith) 100%); }
+  .pillar-play button:hover { filter: brightness(1.08); }
+
+  .section-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 10px; }
+
+  details { border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 22px; }
+  details summary { padding: 12px 0; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-tertiary);
+    list-style: none; display: flex; align-items: center; gap: 6px; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before { content: '+'; font-size: 15px; color: var(--text-tertiary); }
+  details[open] summary::before { content: '−'; }
+  form { padding: 4px 0 16px; display: flex; flex-direction: column; gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+  input, select {
+    width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 14px; outline: none;
+  }
+  input::placeholder { color: var(--text-tertiary); }
+  input[type="file"] { color: var(--text-tertiary); padding: 8px; }
+  form button[type="submit"] {
+    margin-top: 4px; padding: 11px 20px; border: 0; border-radius: 12px;
+    background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%);
+    color: #0a0a0a; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+
+  .filter-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
+  .filter-toggle button {
+    flex: 1; padding: 8px; background: rgba(255,255,255,0.035); color: var(--text-tertiary); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-family: inherit;
+  }
+  .filter-toggle button.active { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+
+  #clip-list { display: flex; flex-direction: column; }
+  .clip {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .clip-info { min-width: 0; }
+  .clip-title { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+  .clip-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+  .clip-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .clip-actions button {
+    padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.035);
+    color: var(--text-primary); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .clip-actions button.danger { color: var(--danger); border-color: rgba(255,107,107,0.3); }
+  .empty-state { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 28px 0; }
 </style>
 </head>
 <body>
-  <h1>Hype Audio Library</h1>
+<div class="page">
+  <h1 class="dash-title">Hype Audio</h1>
 
   <div class="pillar-play">
     <button id="play-iron" type="button">🔥 IRON</button>
     <button id="play-faith" type="button">✝️ FAITH</button>
   </div>
 
-  <form id="upload-form">
-    <input type="file" id="file-input" accept="audio/*" required>
-    <input type="text" id="title-input" placeholder="Title" required>
-    <input type="text" id="mentality-input" placeholder="Mentality (e.g. goggins, dorian, original)" required>
-    <select id="pillar-input" required>
-      <option value="iron">Iron</option>
-      <option value="faith">Faith</option>
-    </select>
-    <select id="moment-input">
-      <option value="pre_workout">Pre-workout</option>
-      <option value="mid_set">Mid-set</option>
-      <option value="post_workout">Post-workout</option>
-    </select>
-    <select id="source-input">
-      <option value="original">Original</option>
-      <option value="licensed">Licensed</option>
-      <option value="personal_use">Personal use only</option>
-    </select>
-    <button type="submit">Upload</button>
-  </form>
+  <details>
+    <summary>Upload a clip</summary>
+    <form id="upload-form">
+      <input type="file" id="file-input" accept="audio/*" required>
+      <div class="field"><label>Title</label><input type="text" id="title-input" placeholder="Title" required></div>
+      <div class="field"><label>Mentality</label><input type="text" id="mentality-input" placeholder="e.g. goggins, dorian, original" required></div>
+      <select id="pillar-input" required>
+        <option value="iron">Iron</option>
+        <option value="faith">Faith</option>
+      </select>
+      <select id="moment-input">
+        <option value="pre_workout">Pre-workout</option>
+        <option value="mid_set">Mid-set</option>
+        <option value="post_workout">Post-workout</option>
+      </select>
+      <select id="source-input">
+        <option value="original">Original</option>
+        <option value="licensed">Licensed</option>
+        <option value="personal_use">Personal use only</option>
+      </select>
+      <button type="submit">Upload</button>
+    </form>
+  </details>
 
+  <div class="section-label">Library</div>
   <div class="filter-toggle">
     <button type="button" class="filter-btn active" data-filter="">All</button>
     <button type="button" class="filter-btn" data-filter="iron">Iron</button>
@@ -57,6 +121,7 @@
   </div>
 
   <div id="clip-list"></div>
+</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="sync.js"></script>
@@ -81,21 +146,33 @@
     function render() {
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
-      HypeAudio.listActiveClips()
-        .filter(function (c) { return !currentFilter || c.pillar === currentFilter; })
-        .forEach(function (clip) {
+      const clips = HypeAudio.listActiveClips()
+        .filter(function (c) { return !currentFilter || c.pillar === currentFilter; });
+      if (!clips.length) {
+        list.innerHTML = '<div class="empty-state">No clips yet — upload one above.</div>';
+        return;
+      }
+      clips.forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
-        row.innerHTML = '<span>' + clip.title + ' — ' + (clip.pillar || 'unset') + ' / ' + clip.mentality + ' / ' + clip.moment +
-          ' (played ' + (clip.play_count || 0) + 'x)</span>';
+        const info = document.createElement('div');
+        info.className = 'clip-info';
+        info.innerHTML = '<div class="clip-title">' + clip.title + '</div>' +
+          '<div class="clip-meta">' + (clip.pillar || 'unset') + ' · ' + clip.mentality + ' · ' + clip.moment +
+          ' · played ' + (clip.play_count || 0) + 'x</div>';
+        const actions = document.createElement('div');
+        actions.className = 'clip-actions';
         const playBtn = document.createElement('button');
         playBtn.textContent = 'Play';
         playBtn.onclick = function () { HypeAudio.playClip(clip); render(); };
         const delBtn = document.createElement('button');
         delBtn.textContent = 'Delete';
+        delBtn.className = 'danger';
         delBtn.onclick = function () { HypeAudio.deleteClip(clip.id); render(); };
-        row.appendChild(playBtn);
-        row.appendChild(delBtn);
+        actions.appendChild(playBtn);
+        actions.appendChild(delBtn);
+        row.appendChild(info);
+        row.appendChild(actions);
         list.appendChild(row);
       });
     }

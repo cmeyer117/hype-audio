@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hype Audio</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; }
+  h1 { font-size: 20px; }
+  .clip { display: flex; align-items: center; justify-content: space-between;
+    background: #1c1c1c; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .clip button { margin-left: 6px; }
+  form { background: #1c1c1c; border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+  input, select { display: block; width: 100%; margin-bottom: 8px; padding: 8px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+  <h1>Hype Audio Library</h1>
+
+  <form id="upload-form">
+    <input type="file" id="file-input" accept="audio/*" required>
+    <input type="text" id="title-input" placeholder="Title" required>
+    <input type="text" id="mentality-input" placeholder="Mentality (e.g. goggins, dorian, original)" required>
+    <select id="moment-input">
+      <option value="pre_workout">Pre-workout</option>
+      <option value="mid_set">Mid-set</option>
+      <option value="post_workout">Post-workout</option>
+    </select>
+    <select id="source-input">
+      <option value="original">Original</option>
+      <option value="licensed">Licensed</option>
+      <option value="personal_use">Personal use only</option>
+    </select>
+    <button type="submit">Upload</button>
+  </form>
+
+  <div id="clip-list"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="hype-audio.js"></script>
+  <script src="hype-player-widget.js"></script>
+  <script>
+    const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    function render() {
+      const list = document.getElementById('clip-list');
+      list.innerHTML = '';
+      HypeAudio.listClips().forEach(function (clip) {
+        const row = document.createElement('div');
+        row.className = 'clip';
+        row.innerHTML = '<span>' + clip.title + ' — ' + clip.mentality + ' / ' + clip.moment +
+          ' (played ' + (clip.play_count || 0) + 'x)</span>';
+        const playBtn = document.createElement('button');
+        playBtn.textContent = 'Play';
+        playBtn.onclick = function () { HypeAudio.playClip(clip); render(); };
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = function () { HypeAudio.deleteClip(clip.id); render(); };
+        row.appendChild(playBtn);
+        row.appendChild(delBtn);
+        list.appendChild(row);
+      });
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const file = document.getElementById('file-input').files[0];
+      const url = await HypeAudio.uploadClipFile(file, supa);
+      if (!url) { alert('Upload failed.'); return; }
+      HypeAudio.addClip({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        title: document.getElementById('title-input').value,
+        mentality: document.getElementById('mentality-input').value,
+        moment: document.getElementById('moment-input').value,
+        source_type: document.getElementById('source-input').value,
+        storage_url: url,
+        created_at: new Date().toISOString(),
+        play_count: 0,
+      });
+      e.target.reset();
+      render();
+    });
+
+    // Poll for cloud sync since this app has no initCloudSync-style
+    // realtime wiring yet (out of scope for v1 — see spec's Out of scope).
+    // A simple manual "Refresh" is enough at solo-user, low-frequency-upload scale.
+    render();
+  </script>
+</body>
+</html>

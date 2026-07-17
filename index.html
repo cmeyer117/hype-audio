@@ -37,12 +37,22 @@
   <div id="clip-list"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="sync.js"></script>
   <script src="hype-audio.js"></script>
   <script src="hype-player-widget.js"></script>
   <script>
     const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Cloud sync for the hype_audio localStorage key — this is what
+    // makes Row's mini-player and this app share the same library.
+    // Re-render whenever a remote change is pulled in.
+    window.initCloudSync({
+      appKey: 'hype-audio',
+      syncedKeys: ['hype_audio'],
+      onApplied: function () { render(); },
+    });
 
     function render() {
       const list = document.getElementById('clip-list');

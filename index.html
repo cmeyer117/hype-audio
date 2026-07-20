@@ -9,147 +9,307 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --text-primary: #F4F1EA; --text-secondary: #B8B6B0; --text-tertiary: #76746E;
-    --iron: #E0332F; --faith: #C9A227; --danger: #FF6B6B;
+    --bg-card: #111113;
+    --text-primary: #F4F1EA; --text-secondary: rgba(244,241,234,0.6); --text-tertiary: rgba(244,241,234,0.4);
+    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.16);
+    --mindset: #8E7CF0; --iron: #E0332F; --faith: #C9A227; --carl: #E0812F; --danger: #ff8a8a;
     --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-serif: 'Instrument Serif', Georgia, serif;
     --font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #000; color: var(--text-secondary); font-family: var(--font); }
-  body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 20px 60px; }
+  html, body {
+    margin: 0; padding: 0; color: var(--text-secondary); font-family: var(--font);
+    background: radial-gradient(ellipse 80% 60% at 75% 0%, rgba(224,51,47,0.07) 0%, #0a0a0b 60%) #0a0a0b;
+  }
+  body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 20px calc(120px + env(safe-area-inset-bottom)); }
   .page { max-width: 640px; margin: 0 auto; }
   .dash-title { margin: 0 0 22px; font-family: var(--font-serif); font-size: 30px; font-weight: 700; font-style: italic; color: var(--text-primary); }
+  .back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .back-btn {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-primary);
+    border-radius: 10px; width: 34px; height: 34px; font-size: 16px; cursor: pointer; flex-shrink: 0;
+  }
+  .view-title { margin: 0; font-family: var(--font-serif); font-size: 24px; font-style: italic; font-weight: 700; color: var(--text-primary); }
 
-  .pillar-play { display: flex; gap: 10px; margin-bottom: 26px; }
-  .pillar-play button {
-    flex: 1; padding: 16px; font-family: var(--font); font-weight: 700; font-size: 14px; letter-spacing: .04em;
-    border: 0; border-radius: 12px; color: #0a0a0a; cursor: pointer;
+  /* ===== Home — tiles ===== */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+  .tile {
+    display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px;
+    padding: 18px; min-height: 130px; cursor: pointer; text-align: left;
+    transition: border-color .2s, background .2s;
+  }
+  .tile:hover { border-color: var(--border-strong); background: #17171a; }
+  .tile-emoji { font-size: 26px; }
+  .tile-name { font-family: var(--font-serif); font-style: italic; font-weight: 700; font-size: 19px; color: var(--text-primary); }
+  .tile-footer { display: flex; align-items: center; justify-content: space-between; }
+  .tile-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+  .tile-arrow { color: var(--text-tertiary); }
+
+  /* ===== Section view ===== */
+  .random-play {
+    width: 100%; padding: 16px; margin-bottom: 22px; border: 0; border-radius: 14px;
+    color: #0a0a0a; font-family: var(--font); font-weight: 700; font-size: 14px; cursor: pointer;
     display: flex; align-items: center; justify-content: center; gap: 8px;
     transition: transform .08s ease, filter .15s ease;
   }
-  .pillar-play button:active { transform: scale(.97); }
-  #play-iron { background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%); }
-  #play-faith { background: linear-gradient(135deg, #E0BC4A 0%, var(--faith) 100%); }
-  .pillar-play button:hover { filter: brightness(1.08); }
+  .random-play:active { transform: scale(.98); }
+  .random-play:hover { filter: brightness(1.08); }
 
   .section-label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 10px; }
 
-  details { border-top: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 22px; }
-  details summary { padding: 12px 0; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-tertiary);
+  details {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
+    margin-bottom: 22px; overflow: hidden;
+  }
+  details summary { padding: 14px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-tertiary);
     list-style: none; display: flex; align-items: center; gap: 6px; }
   details summary::-webkit-details-marker { display: none; }
   details summary::before { content: '+'; font-size: 15px; color: var(--text-tertiary); }
   details[open] summary::before { content: '−'; }
-  form { padding: 4px 0 16px; display: flex; flex-direction: column; gap: 12px; }
+  details[open] summary { border-bottom: 1px solid var(--border); }
+  form { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
   input, select {
-    width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+    width: 100%; padding: 11px 14px; background: rgba(0,0,0,0.28); border: 1px solid var(--border);
     border-radius: 10px; color: var(--text-primary); font-family: inherit; font-size: 14px; outline: none;
   }
   input::placeholder { color: var(--text-tertiary); }
   input[type="file"] { color: var(--text-tertiary); padding: 8px; }
   form button[type="submit"] {
-    margin-top: 4px; padding: 11px 20px; border: 0; border-radius: 12px;
+    margin-top: 4px; padding: 12px 20px; border: 0; border-radius: 12px;
     background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%);
     color: #0a0a0a; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
 
-  .filter-toggle { display: flex; gap: 6px; margin-bottom: 14px; }
-  .filter-toggle button {
-    flex: 1; padding: 8px; background: rgba(255,255,255,0.035); color: var(--text-tertiary); border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px; cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-family: inherit;
-  }
-  .filter-toggle button.active { background: rgba(255,255,255,0.08); color: var(--text-primary); }
-
   #clip-list { display: flex; flex-direction: column; }
   .clip {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    padding: 13px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 14px 16px; margin-bottom: 10px;
   }
   .clip-info { min-width: 0; }
   .clip-title { font-weight: 600; font-size: 14px; color: var(--text-primary); }
   .clip-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
-  .clip-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .clip-actions button {
-    padding: 7px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.035);
-    color: var(--text-primary); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  .clip-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; position: relative; }
+  .clip-actions .play-btn {
+    padding: 8px 12px; width: 44px; border-radius: 10px; border: 1px solid var(--border-strong); background: rgba(255,255,255,0.06);
+    color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
-  .clip-actions button.danger { color: var(--danger); border-color: rgba(255,107,107,0.3); }
+  .clip-actions .play-btn:hover { background: rgba(255,255,255,0.1); }
+  /* Delete lives inside this menu, not as its own visible icon — the whole
+     point is it should never be a fat-finger accident: open the menu, then
+     confirm() on top of that. */
+  .menu-wrap { position: relative; }
+  .menu-btn {
+    padding: 6px; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: transparent;
+    color: var(--text-tertiary); font-size: 16px; cursor: pointer; line-height: 1;
+  }
+  .menu-btn:hover, .menu-btn.open { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+  .menu-dropdown {
+    display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; z-index: 10;
+    background: #1a1a1d; border: 1px solid var(--border-strong); border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.5); min-width: 120px; overflow: hidden;
+  }
+  .menu-dropdown.open { display: block; }
+  .menu-item {
+    width: 100%; padding: 10px 14px; background: transparent; border: 0; text-align: left;
+    color: var(--danger); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .menu-item:hover { background: rgba(255,138,138,0.1); }
   .empty-state { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 28px 0; }
+
+  /* ===== Bottom tab bar (Row's gym-tabbar pattern) ===== */
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    display: flex; justify-content: center;
+    padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.85) 40%, rgba(10,10,11,0.97) 100%);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    pointer-events: none;
+  }
+  .tabbar-inner {
+    pointer-events: auto;
+    display: flex; width: 100%; max-width: 460px; gap: 4px;
+    padding: 6px; background: rgba(20,20,22,0.75);
+    border: 1px solid var(--border); border-radius: 18px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  }
+  .tab {
+    flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    padding: 9px 4px; border-radius: 13px; font-size: 10px; font-weight: 600; letter-spacing: .02em;
+    color: var(--text-tertiary); background: transparent; border: 1px solid transparent; cursor: pointer;
+  }
+  .tab .tab-emoji { font-size: 16px; }
+  .tab.active { color: var(--text-primary); background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
 </style>
 </head>
 <body>
 <div class="page">
-  <h1 class="dash-title">Hype Audio</h1>
 
-  <div class="pillar-play">
-    <button id="play-iron" type="button">🔥 IRON</button>
-    <button id="play-faith" type="button">✝️ FAITH</button>
+  <div id="view-home">
+    <h1 class="dash-title">Hype Audio</h1>
+    <div class="tiles" id="tiles"></div>
   </div>
 
-  <details>
-    <summary>Upload a clip</summary>
-    <form id="upload-form">
-      <input type="file" id="file-input" accept="audio/*" required>
-      <div class="field"><label>Title</label><input type="text" id="title-input" placeholder="Title" required></div>
-      <div class="field"><label>Mentality</label><input type="text" id="mentality-input" placeholder="e.g. goggins, dorian, original" required></div>
-      <select id="pillar-input" required>
-        <option value="iron">Iron</option>
-        <option value="faith">Faith</option>
-      </select>
-      <select id="moment-input">
-        <option value="pre_workout">Pre-workout</option>
-        <option value="mid_set">Mid-set</option>
-        <option value="post_workout">Post-workout</option>
-      </select>
-      <select id="source-input">
-        <option value="original">Original</option>
-        <option value="licensed">Licensed</option>
-        <option value="personal_use">Personal use only</option>
-      </select>
-      <button type="submit">Upload</button>
-    </form>
-  </details>
+  <div id="view-section" style="display:none">
+    <div class="back-row">
+      <button class="back-btn" id="back-btn" type="button">←</button>
+      <h1 class="view-title" id="section-title"></h1>
+    </div>
 
-  <div class="section-label">Library</div>
-  <div class="filter-toggle">
-    <button type="button" class="filter-btn active" data-filter="">All</button>
-    <button type="button" class="filter-btn" data-filter="iron">Iron</button>
-    <button type="button" class="filter-btn" data-filter="faith">Faith</button>
+    <button class="random-play" id="random-play" type="button"></button>
+
+    <details>
+      <summary>Upload a clip</summary>
+      <form id="upload-form">
+        <input type="file" id="file-input" accept="audio/*" required>
+        <div class="field"><label>Title</label><input type="text" id="title-input" placeholder="Title" required></div>
+        <div class="field"><label>Mentality</label><input type="text" id="mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
+        <select id="pillar-input" required>
+          <option value="mindset">Mindset</option>
+          <option value="iron">Iron</option>
+          <option value="faith">Faith</option>
+          <option value="carl">Carl</option>
+        </select>
+        <select id="moment-input">
+          <option value="pre_workout">Pre-workout</option>
+          <option value="mid_set">Mid-set</option>
+          <option value="post_workout">Post-workout</option>
+        </select>
+        <select id="source-input">
+          <option value="original">Original</option>
+          <option value="licensed">Licensed</option>
+          <option value="personal_use">Personal use only</option>
+        </select>
+        <button type="submit">Upload</button>
+      </form>
+    </details>
+
+    <div class="section-label">Library</div>
+    <div id="clip-list"></div>
   </div>
 
-  <div id="clip-list"></div>
 </div>
+
+  <nav class="tabbar">
+    <div class="tabbar-inner" id="tabbar-inner"></div>
+  </nav>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="sync.js"></script>
   <script src="hype-audio.js"></script>
-  <script src="hype-player-widget.js"></script>
   <script>
     const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+    const PILLARS = {
+      mindset: { label: 'Mindset', emoji: '🧠', color: 'var(--mindset)' },
+      iron:    { label: 'Iron',    emoji: '🔥', color: 'var(--iron)' },
+      faith:   { label: 'Faith',   emoji: '✝️', color: 'var(--faith)' },
+      carl:    { label: 'Carl',    emoji: '🎙️', color: 'var(--carl)' },
+    };
+    const PILLAR_ORDER = ['mindset', 'iron', 'faith', 'carl'];
+
     // Cloud sync for the hype_audio localStorage key — this is what
     // makes Row's mini-player and this app share the same library.
-    // Re-render whenever a remote change is pulled in.
     window.initCloudSync({
       appKey: 'hype-audio',
       syncedKeys: ['hype_audio'],
-      onApplied: function () { render(); },
+      onApplied: function () {
+        HypeAudio.migrateGogginsToMindset();
+        HypeAudio.migrateCarlToOwnPillar();
+        renderHome();
+        if (currentView) renderSection(currentView);
+      },
     });
 
-    let currentFilter = '';
+    let currentView = null; // null = home, else a pillar key
 
-    function render() {
+    function renderHome() {
+      const tiles = document.getElementById('tiles');
+      tiles.innerHTML = '';
+      PILLAR_ORDER.forEach(function (key) {
+        const meta = PILLARS[key];
+        const count = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key; }).length;
+        const tile = document.createElement('button');
+        tile.className = 'tile';
+        tile.type = 'button';
+        tile.style.borderColor = 'transparent';
+        tile.innerHTML =
+          '<div class="tile-emoji">' + meta.emoji + '</div>' +
+          '<div>' +
+            '<div class="tile-name" style="color:' + meta.color + '">' + meta.label + '</div>' +
+            '<div class="tile-footer">' +
+              '<span class="tile-count">' + count + ' clip' + (count === 1 ? '' : 's') + '</span>' +
+              '<span class="tile-arrow">→</span>' +
+            '</div>' +
+          '</div>';
+        tile.onclick = function () { showSection(key); };
+        tiles.appendChild(tile);
+      });
+    }
+
+    function renderTabbar() {
+      const inner = document.getElementById('tabbar-inner');
+      inner.innerHTML = '';
+      const homeTab = document.createElement('button');
+      homeTab.className = 'tab' + (currentView === null ? ' active' : '');
+      homeTab.type = 'button';
+      homeTab.innerHTML = '<span class="tab-emoji">🏠</span>Home';
+      homeTab.onclick = function () { showHome(); };
+      inner.appendChild(homeTab);
+      PILLAR_ORDER.forEach(function (key) {
+        const meta = PILLARS[key];
+        const tab = document.createElement('button');
+        tab.className = 'tab' + (currentView === key ? ' active' : '');
+        tab.type = 'button';
+        tab.innerHTML = '<span class="tab-emoji">' + meta.emoji + '</span>' + meta.label;
+        tab.onclick = function () { showSection(key); };
+        inner.appendChild(tab);
+      });
+    }
+
+    function showHome() {
+      currentView = null;
+      document.getElementById('view-home').style.display = '';
+      document.getElementById('view-section').style.display = 'none';
+      renderHome();
+      renderTabbar();
+    }
+
+    function showSection(key) {
+      currentView = key;
+      document.getElementById('view-home').style.display = 'none';
+      document.getElementById('view-section').style.display = '';
+      renderSection(key);
+      renderTabbar();
+    }
+
+    function renderSection(key) {
+      const meta = PILLARS[key];
+      document.getElementById('section-title').textContent = meta.label;
+      document.getElementById('section-title').style.color = meta.color;
+      document.getElementById('pillar-input').value = key;
+
+      const randomBtn = document.getElementById('random-play');
+      randomBtn.textContent = meta.emoji + ' PLAY RANDOM';
+      randomBtn.style.background = 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
+      randomBtn.onclick = function () {
+        const clip = HypeAudio.pickRandom({ pillar: key });
+        if (!clip) { alert('No ' + meta.label.toLowerCase() + ' clips yet — upload one below.'); return; }
+        HypeAudio.playClip(clip);
+        renderSection(key);
+      };
+
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
-      const clips = HypeAudio.listActiveClips()
-        .filter(function (c) { return !currentFilter || c.pillar === currentFilter; });
+      const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key; });
       if (!clips.length) {
-        list.innerHTML = '<div class="empty-state">No clips yet — upload one above.</div>';
+        list.innerHTML = '<div class="empty-state">No ' + meta.label.toLowerCase() + ' clips yet — upload one above.</div>';
         return;
       }
       clips.forEach(function (clip) {
@@ -158,42 +318,60 @@
         const info = document.createElement('div');
         info.className = 'clip-info';
         info.innerHTML = '<div class="clip-title">' + clip.title + '</div>' +
-          '<div class="clip-meta">' + (clip.pillar || 'unset') + ' · ' + clip.mentality + ' · ' + clip.moment +
-          ' · played ' + (clip.play_count || 0) + 'x</div>';
+          '<div class="clip-meta">' + clip.mentality + ' · ' + clip.moment + ' · played ' + (clip.play_count || 0) + 'x</div>';
         const actions = document.createElement('div');
         actions.className = 'clip-actions';
         const playBtn = document.createElement('button');
-        playBtn.textContent = 'Play';
-        playBtn.onclick = function () { HypeAudio.playClip(clip); render(); };
-        const delBtn = document.createElement('button');
-        delBtn.textContent = 'Delete';
-        delBtn.className = 'danger';
-        delBtn.onclick = function () { HypeAudio.deleteClip(clip.id); render(); };
+        playBtn.className = 'play-btn';
+        playBtn.textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+        playBtn.onclick = function () { HypeAudio.togglePlay(clip); renderSection(key); };
+
+        const menuWrap = document.createElement('div');
+        menuWrap.className = 'menu-wrap';
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'menu-btn';
+        menuBtn.title = 'More';
+        menuBtn.textContent = '⋮';
+        const dropdown = document.createElement('div');
+        dropdown.className = 'menu-dropdown';
+        const delItem = document.createElement('button');
+        delItem.className = 'menu-item';
+        delItem.textContent = 'Delete';
+        delItem.onclick = function () {
+          dropdown.classList.remove('open');
+          if (!confirm('Delete "' + clip.title + '"? This can\'t be undone.')) return;
+          HypeAudio.deleteClip(clip.id);
+          renderSection(key);
+        };
+        dropdown.appendChild(delItem);
+        menuBtn.onclick = function (e) {
+          e.stopPropagation();
+          const isOpen = dropdown.classList.contains('open');
+          closeAllMenus();
+          if (!isOpen) { dropdown.classList.add('open'); menuBtn.classList.add('open'); }
+        };
+        menuWrap.appendChild(menuBtn);
+        menuWrap.appendChild(dropdown);
+
         actions.appendChild(playBtn);
-        actions.appendChild(delBtn);
+        actions.appendChild(menuWrap);
         row.appendChild(info);
         row.appendChild(actions);
         list.appendChild(row);
       });
     }
 
-    document.querySelectorAll('.filter-btn').forEach(function (btn) {
-      btn.onclick = function () {
-        currentFilter = btn.dataset.filter;
-        document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
-        btn.classList.add('active');
-        render();
-      };
-    });
+    document.getElementById('back-btn').onclick = function () { showHome(); };
 
-    function playPillar(pillar) {
-      const clip = HypeAudio.pickRandom({ pillar: pillar });
-      if (!clip) { alert('No ' + pillar + ' clips yet — upload some below.'); return; }
-      HypeAudio.playClip(clip);
-      render();
+    function closeAllMenus() {
+      document.querySelectorAll('.menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
+      document.querySelectorAll('.menu-btn.open').forEach(function (b) { b.classList.remove('open'); });
     }
-    document.getElementById('play-iron').onclick = function () { playPillar('iron'); };
-    document.getElementById('play-faith').onclick = function () { playPillar('faith'); };
+    document.addEventListener('click', closeAllMenus);
+
+    // Keep whichever row is actually playing in sync (icon flips to ▶ again
+    // once a clip ends, without polling).
+    HypeAudio.onPlaybackChange(function () { if (currentView) renderSection(currentView); });
 
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -212,13 +390,15 @@
         play_count: 0,
       });
       e.target.reset();
-      render();
+      document.getElementById('pillar-input').value = currentView;
+      if (currentView) renderSection(currentView);
     });
 
-    // Poll for cloud sync since this app has no initCloudSync-style
-    // realtime wiring yet (out of scope for v1 — see spec's Out of scope).
-    // A simple manual "Refresh" is enough at solo-user, low-frequency-upload scale.
-    render();
+    // One-time-in-effect migrations (Goggins -> Mindset, Carl's-own-voice ->
+    // Carl) — idempotent, safe to run on every load.
+    HypeAudio.migrateGogginsToMindset();
+    HypeAudio.migrateCarlToOwnPillar();
+    showHome();
   </script>
 </body>
 </html>

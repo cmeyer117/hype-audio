@@ -41,4 +41,26 @@ assertEqual(HypeAudio.listClips().map((c) => c.id), ['1', '2', '3'], 'deleted cl
 assertEqual(HypeAudio.listClips().find((c) => c.id === '3').deleted, true, 'tombstone is marked deleted:true');
 assertEqual(HypeAudio.pickRandom({}).id === '3', false, 'pickRandom never returns a deleted clip');
 
+// migrateGogginsToMindset — splits Goggins-mentality iron clips into their own pillar
+HypeAudio.addClip({ id: '4', title: 'D', mentality: 'David Goggins', pillar: 'iron', play_count: 0 });
+HypeAudio.addClip({ id: '5', title: 'E', mentality: 'dorian', pillar: 'iron', play_count: 0 });
+HypeAudio.migrateGogginsToMindset();
+assertEqual(HypeAudio.listClips().find((c) => c.id === '4').pillar, 'mindset', 'goggins-mentality iron clip migrates to mindset');
+assertEqual(HypeAudio.listClips().find((c) => c.id === '5').pillar, 'iron', 'non-goggins iron clip stays iron');
+HypeAudio.migrateGogginsToMindset();
+assertEqual(HypeAudio.listClips().find((c) => c.id === '4').pillar, 'mindset', 'migration is idempotent');
+
+// pickRandom accepts an array of pillars (Row's widget pulls iron+mindset together)
+const multiPick = HypeAudio.pickRandom({ pillar: ['iron', 'mindset'] });
+assertEqual(['4', '5'].indexOf(multiPick.id) !== -1, true, 'pickRandom with a pillar array matches any listed pillar');
+assertEqual(HypeAudio.pickRandom({ pillar: ['dorian-nonexistent'] }), null, 'pickRandom with a pillar array excludes non-matching pillars');
+
+// migrateCarlToOwnPillar — splits Carl's-own-voice iron clips into their own pillar
+HypeAudio.addClip({ id: '6', title: 'F', mentality: 'carl rant', pillar: 'iron', play_count: 0 });
+HypeAudio.migrateCarlToOwnPillar();
+assertEqual(HypeAudio.listClips().find((c) => c.id === '6').pillar, 'carl', 'carl-mentality iron clip migrates to its own carl pillar');
+assertEqual(HypeAudio.listClips().find((c) => c.id === '5').pillar, 'iron', 'non-carl, non-goggins iron clip stays iron');
+HypeAudio.migrateCarlToOwnPillar();
+assertEqual(HypeAudio.listClips().find((c) => c.id === '6').pillar, 'carl', 'migration is idempotent');
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

@@ -52,20 +52,87 @@
 
   function pickRandom(filter) {
     filter = filter || {};
+    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
     const pool = listActiveClips().filter((c) =>
       (!filter.mentality || c.mentality === filter.mentality) &&
       (!filter.moment || c.moment === filter.moment) &&
-      (!filter.pillar || c.pillar === filter.pillar)
+      (!pillars || pillars.indexOf(c.pillar) !== -1)
     );
     if (pool.length === 0) return null;
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // Only one clip should ever be audible at once — module-level handle so a
+  // second playClip() call stops whatever's already playing instead of layering.
+  let currentAudio = null;
+  let currentClipId = null;
+  let onChangeCb = null;
+
+  function notifyChange() { if (onChangeCb) onChangeCb(); }
+
+  // Subscribe to play/pause/end state changes so the UI can re-render the
+  // right row's play/pause icon without polling.
+  function onPlaybackChange(cb) { onChangeCb = cb; }
+
+  function isPlaying(clipId) {
+    return currentClipId === clipId && !!currentAudio && !currentAudio.paused;
+  }
+
   function playClip(clip) {
+    if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     const audio = new Audio(clip.storage_url);
+    currentAudio = audio;
+    currentClipId = clip.id;
+    audio.onplay = notifyChange;
+    audio.onpause = notifyChange;
+    audio.onended = function () { currentClipId = null; notifyChange(); };
     audio.play().catch(function () {});
     updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
     return audio;
+  }
+
+  // Play/pause toggle for a specific clip row: resumes in place if it's the
+  // currently-loaded clip, starts fresh (stopping whatever else is playing)
+  // otherwise.
+  function togglePlay(clip) {
+    if (currentClipId === clip.id && currentAudio) {
+      if (currentAudio.paused) { currentAudio.play().catch(function () {}); }
+      else { currentAudio.pause(); }
+      return currentAudio;
+    }
+    return playClip(clip);
+  }
+
+  // One-time-in-effect migration: clips tagged pillar:'iron' whose mentality
+  // names Goggins move to their own 'mindset' pillar (Carl's 2026-07-20 call
+  // to split Goggins out of Iron into its own section). Idempotent — safe to
+  // call on every load, a no-op once a clip has already moved.
+  function migrateGogginsToMindset() {
+    const clips = listClips();
+    let changed = false;
+    clips.forEach(function (c) {
+      if (c.pillar === 'iron' && typeof c.mentality === 'string' && c.mentality.toLowerCase().indexOf('goggins') !== -1) {
+        c.pillar = 'mindset';
+        changed = true;
+      }
+    });
+    if (changed) saveClips(clips);
+  }
+
+  // Same pattern: clips tagged pillar:'iron' whose mentality names Carl
+  // himself move to their own 'carl' pillar (2026-07-20, Carl's call to give
+  // his own rants a dedicated section distinct from Dorian/hardcore Iron
+  // content). Idempotent.
+  function migrateCarlToOwnPillar() {
+    const clips = listClips();
+    let changed = false;
+    clips.forEach(function (c) {
+      if (c.pillar === 'iron' && typeof c.mentality === 'string' && c.mentality.toLowerCase().indexOf('carl') !== -1) {
+        c.pillar = 'carl';
+        changed = true;
+      }
+    });
+    if (changed) saveClips(clips);
   }
 
   async function uploadClipFile(file, supa) {
@@ -88,7 +155,12 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       playClip: playClip,
+      togglePlay: togglePlay,
+      isPlaying: isPlaying,
+      onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
+      migrateGogginsToMindset: migrateGogginsToMindset,
+      migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };
   }
   if (typeof module !== 'undefined' && module.exports) {
@@ -99,6 +171,8 @@
       updateClip: updateClip,
       deleteClip: deleteClip,
       pickRandom: pickRandom,
+      migrateGogginsToMindset: migrateGogginsToMindset,
+      migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };
   }
 })();

@@ -49,13 +49,28 @@ function titleFrom(text) {
   return text.trim().split(/\s+/).slice(0, 10).join(' ') + '…';
 }
 
+// The bed ("Dark Cinematic") has a quiet suspense build from 0-10s and
+// drops into full power at t=11s (measured via per-second RMS). Time the
+// drop to land at ~65% through each clip: long clips open with dry voice,
+// the build creeps in mid-clip, the drop hits at the climax. Short clips
+// (<~17s to climax) start the bed at a track offset instead so the drop
+// still lands near the peak.
+const TRACK_DROP = 11;
+
 function trimAndMixGoggins(base, start, end, outPath) {
   const voicePath = path.join(__dirname, 'output', 'goggins', base + '.mp3');
   const d = end - start;
   const fadeStart = Math.max(0, d - 1.5);
+  const tClimax = 0.65 * d;
+  const tEnter = Math.max(0, tClimax - TRACK_DROP);   // music entry point in the clip
+  const trackOffset = Math.max(0, TRACK_DROP - tClimax); // where in the track to start
+  const musicDur = d - tEnter;
+  const delayMs = Math.round(tEnter * 1000);
   const filter =
     `[0:a]atrim=${start}:${end},asetpts=PTS-STARTPTS,volume=1.0[voice];` +
-    `[1:a]atrim=0:${d},afade=t=in:d=1,afade=t=out:st=${fadeStart}:d=1.5,volume=0.75[music];` +
+    `[1:a]atrim=${trackOffset}:${trackOffset + musicDur},asetpts=PTS-STARTPTS,` +
+    `afade=t=in:d=2,afade=t=out:st=${Math.max(0, musicDur - 1.5)}:d=1.5,volume=0.75,` +
+    `adelay=${delayMs}|${delayMs}[music];` +
     `[music][voice]sidechaincompress=threshold=0.25:ratio=2.5:attack=5:release=200[ducked];` +
     `[voice][ducked]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[premix];` +
     `[premix]alimiter=limit=0.95[out]`;

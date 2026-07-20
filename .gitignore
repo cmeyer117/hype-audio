@@ -1,0 +1,4 @@
+.vercel
+node_modules
+scripts/output/
+scripts/assets/

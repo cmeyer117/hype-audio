@@ -90,7 +90,8 @@
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 14px 16px; margin-bottom: 10px;
   }
-  .clip-info { min-width: 0; }
+  .clip-info { min-width: 0; flex: 1; }
+  .clip-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
   .clip-title { font-weight: 600; font-size: 14px; color: var(--text-primary); }
   .clip-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
   .clip-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; position: relative; }
@@ -214,6 +215,19 @@
     };
     const PILLAR_ORDER = ['mindset', 'iron', 'faith', 'carl'];
 
+    // Cached in a module-level var (not re-fetched per render) — the manifest
+    // never changes during a session. Starts with just a `default` entry so
+    // renderSection() has something safe to fall back to before the fetch
+    // resolves; re-renders the current section once the real manifest lands.
+    let CLIP_ART_MANIFEST = { default: 'default.png' };
+    fetch('images/clip-art-manifest.json')
+      .then(function (r) { return r.json(); })
+      .then(function (manifest) {
+        CLIP_ART_MANIFEST = manifest;
+        if (currentView) renderSection(currentView);
+      })
+      .catch(function () {});
+
     // Cloud sync for the hype_audio localStorage key — this is what
     // makes Row's mini-player and this app share the same library.
     window.initCloudSync({
@@ -315,6 +329,10 @@
       clips.forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
+        const thumb = document.createElement('img');
+        thumb.className = 'clip-thumb';
+        thumb.alt = '';
+        thumb.src = 'images/clips/' + (CLIP_ART_MANIFEST[clip.mentality] || CLIP_ART_MANIFEST.default);
         const info = document.createElement('div');
         info.className = 'clip-info';
         info.innerHTML = '<div class="clip-title">' + clip.title + '</div>' +
@@ -355,6 +373,7 @@
 
         actions.appendChild(playBtn);
         actions.appendChild(menuWrap);
+        row.appendChild(thumb);
         row.appendChild(info);
         row.appendChild(actions);
         list.appendChild(row);

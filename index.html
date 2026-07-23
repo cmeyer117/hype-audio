@@ -310,9 +310,14 @@
             '</div>' +
           '</div>';
         const panels = tile.querySelector('.tile-panels');
-        for (let n = 1; n <= 4; n++) {
+        // Carl's tile is a real face, not a mood shot -- splitting it into
+        // 4 tiny quarter-panels leaves nothing recognizable at real tile
+        // size. One full photo instead; the other pillars keep the grid.
+        const panelCount = key === 'carl' ? 1 : 4;
+        for (let n = 1; n <= panelCount; n++) {
           const cell = document.createElement('div');
           cell.className = 'tile-panel';
+          if (panelCount === 1) { cell.style.gridColumn = '1 / -1'; cell.style.gridRow = '1 / -1'; }
           cell.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
           const img = new Image();
           img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };

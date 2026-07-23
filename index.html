@@ -24,7 +24,12 @@
   }
   body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 20px calc(120px + env(safe-area-inset-bottom)); }
   .page { max-width: 640px; margin: 0 auto; }
-  .dash-title { margin: 0 0 22px; font-family: var(--font-serif); font-size: 30px; font-weight: 700; font-style: italic; color: var(--text-primary); }
+  .home-eyebrow { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 6px; }
+  .dash-title {
+    margin: 0 0 26px; font-family: var(--font-serif); font-size: 38px; font-weight: 700; font-style: italic;
+    background: linear-gradient(135deg, var(--iron) 0%, var(--mindset) 50%, var(--faith) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
   .back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .back-btn {
     background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text-primary);
@@ -32,17 +37,42 @@
   }
   .view-title { margin: 0; font-family: var(--font-serif); font-size: 24px; font-style: italic; font-weight: 700; color: var(--text-primary); }
 
-  /* ===== Home — tiles ===== */
-  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+  /* ===== Home — tiles (comic-panel style) ===== */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 8px; }
   .tile {
-    display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px;
-    padding: 18px; min-height: 130px; cursor: pointer; text-align: left;
-    transition: border-color .2s, background .2s;
+    position: relative; overflow: hidden;
+    border: 3px solid var(--border-strong); border-radius: 14px;
+    min-height: 230px; cursor: pointer; text-align: left;
+    background-color: var(--bg-card);
+    box-shadow: 7px 7px 0 rgba(0,0,0,0.55);
+    transition: transform .15s, box-shadow .15s;
   }
-  .tile:hover { border-color: var(--border-strong); background: #17171a; }
-  .tile-emoji { font-size: 26px; }
-  .tile-name { font-family: var(--font-serif); font-style: italic; font-weight: 700; font-size: 19px; color: var(--text-primary); }
+  .tile:hover { transform: translate(-2px, -2px); box-shadow: 9px 9px 0 rgba(0,0,0,0.55); }
+  .tile-panels {
+    position: absolute; inset: 0; display: grid;
+    grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 3px;
+    background: #000;
+  }
+  .tile-panel { background-size: cover; background-position: center; }
+  .tile::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,10,11,0.05) 0%, rgba(10,10,11,0.5) 55%, rgba(10,10,11,0.94) 100%);
+  }
+  .tile::after {
+    /* halftone-dot ink texture, comic print feel */
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(244,241,234,0.9) 1px, transparent 1.4px);
+    background-size: 5px 5px; opacity: .05; mix-blend-mode: overlay;
+  }
+  .tile-content {
+    position: relative; z-index: 1; height: 100%;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 14px; padding: 22px;
+  }
+  .tile-emoji { font-size: 34px; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7)); }
+  .tile-name {
+    font-family: var(--font); font-weight: 800; font-size: 27px; text-transform: uppercase; letter-spacing: .01em;
+    color: var(--text-primary); text-shadow: 3px 3px 0 rgba(0,0,0,0.8);
+  }
   .tile-footer { display: flex; align-items: center; justify-content: space-between; }
   .tile-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
   .tile-arrow { color: var(--text-tertiary); }
@@ -151,6 +181,7 @@
 <div class="page">
 
   <div id="view-home">
+    <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
     <div class="tiles" id="tiles"></div>
   </div>
@@ -252,16 +283,29 @@
         const tile = document.createElement('button');
         tile.className = 'tile';
         tile.type = 'button';
-        tile.style.borderColor = 'transparent';
+        tile.style.borderColor = meta.color;
         tile.innerHTML =
-          '<div class="tile-emoji">' + meta.emoji + '</div>' +
-          '<div>' +
-            '<div class="tile-name" style="color:' + meta.color + '">' + meta.label + '</div>' +
-            '<div class="tile-footer">' +
-              '<span class="tile-count">' + count + ' clip' + (count === 1 ? '' : 's') + '</span>' +
-              '<span class="tile-arrow">→</span>' +
+          '<div class="tile-panels" id="panels-' + key + '"></div>' +
+          '<div class="tile-content">' +
+            '<div class="tile-emoji">' + meta.emoji + '</div>' +
+            '<div>' +
+              '<div class="tile-name" style="color:' + meta.color + '">' + meta.label + '</div>' +
+              '<div class="tile-footer">' +
+                '<span class="tile-count">' + count + ' clip' + (count === 1 ? '' : 's') + '</span>' +
+                '<span class="tile-arrow">→</span>' +
+              '</div>' +
             '</div>' +
           '</div>';
+        const panels = tile.querySelector('.tile-panels');
+        for (let n = 1; n <= 4; n++) {
+          const cell = document.createElement('div');
+          cell.className = 'tile-panel';
+          cell.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
+          const img = new Image();
+          img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };
+          img.src = 'images/home/' + key + '-' + n + '.png';
+          panels.appendChild(cell);
+        }
         tile.onclick = function () { showSection(key); };
         tiles.appendChild(tile);
       });

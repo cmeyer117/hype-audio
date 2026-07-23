@@ -22,8 +22,16 @@
     margin: 0; padding: 0; color: var(--text-secondary); font-family: var(--font);
     background: radial-gradient(ellipse 80% 60% at 75% 0%, rgba(224,51,47,0.07) 0%, #0a0a0b 60%) #0a0a0b;
   }
-  body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 20px calc(120px + env(safe-area-inset-bottom)); }
-  .page { max-width: 640px; margin: 0 auto; }
+  body { min-height: 100vh; padding: max(28px, env(safe-area-inset-top)) 30px calc(120px + env(safe-area-inset-bottom)); position: relative; }
+  .page { max-width: 640px; margin: 0 auto; position: relative; z-index: 1; }
+  .page-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background-size: cover; background-position: center;
+  }
+  .page-bg::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(10,10,11,0.7);
+  }
   .home-eyebrow { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--text-tertiary); margin: 0 0 6px; }
   .dash-title {
     margin: 0 0 26px; font-family: var(--font-serif); font-size: 38px; font-weight: 700; font-style: italic;
@@ -78,15 +86,6 @@
   .tile-arrow { color: var(--text-tertiary); }
 
   /* ===== Section view ===== */
-  .section-hero {
-    position: relative; height: 200px; margin-bottom: 22px; border-radius: 20px; overflow: hidden;
-    background-color: var(--bg-card); background-size: cover; background-position: center;
-    border: 1px solid var(--border);
-  }
-  .section-hero::after {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.75) 75%, #0a0a0b 100%);
-  }
   .random-play {
     width: 100%; padding: 16px; margin-bottom: 22px; border: 0; border-radius: 14px;
     color: #0a0a0a; font-family: var(--font); font-weight: 700; font-size: 14px; cursor: pointer;
@@ -187,6 +186,7 @@
 </style>
 </head>
 <body>
+<div class="page-bg" id="page-bg"></div>
 <div class="page">
 
   <div id="view-home">
@@ -195,13 +195,11 @@
     <div class="tiles" id="tiles"></div>
   </div>
 
-  <div id="view-section" style="display:none">
+  <div id="view-section" style="display:none; padding: 0 10px">
     <div class="back-row">
       <button class="back-btn" id="back-btn" type="button">←</button>
       <h1 class="view-title" id="section-title"></h1>
     </div>
-
-    <div class="section-hero" id="section-hero"></div>
 
     <button class="random-play" id="random-play" type="button"></button>
 
@@ -346,6 +344,7 @@
       currentView = null;
       document.getElementById('view-home').style.display = '';
       document.getElementById('view-section').style.display = 'none';
+      document.getElementById('page-bg').style.backgroundImage = 'none';
       renderHome();
       renderTabbar();
     }
@@ -363,7 +362,7 @@
       document.getElementById('section-title').textContent = meta.label;
       document.getElementById('section-title').style.color = meta.color;
       document.getElementById('pillar-input').value = key;
-      document.getElementById('section-hero').style.backgroundImage = "url('images/home/" + key + "-1.png')";
+      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1.png')";
 
       const randomBtn = document.getElementById('random-play');
       randomBtn.textContent = meta.emoji + ' PLAY RANDOM';

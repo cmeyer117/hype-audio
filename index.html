@@ -318,7 +318,7 @@
           const cell = document.createElement('div');
           cell.className = 'tile-panel';
           if (panelCount === 1) { cell.style.gridColumn = '1 / -1'; cell.style.gridRow = '1 / -1'; }
-          cell.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
+          cell.style.backgroundImage = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
           const img = new Image();
           img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };
           img.src = 'images/home/' + key + '-' + n + '.' + heroImgExt(key);

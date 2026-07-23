@@ -335,8 +335,14 @@
         thumb.src = 'images/clips/' + (Object.hasOwn(CLIP_ART_MANIFEST, clip.mentality) ? CLIP_ART_MANIFEST[clip.mentality] : CLIP_ART_MANIFEST.default);
         const info = document.createElement('div');
         info.className = 'clip-info';
-        info.innerHTML = '<div class="clip-title">' + clip.title + '</div>' +
-          '<div class="clip-meta">' + clip.mentality + ' · ' + clip.moment + ' · played ' + (clip.play_count || 0) + 'x</div>';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'clip-title';
+        titleEl.textContent = clip.title;
+        const metaEl = document.createElement('div');
+        metaEl.className = 'clip-meta';
+        metaEl.textContent = clip.mentality + ' · ' + clip.moment + ' · played ' + (clip.play_count || 0) + 'x';
+        info.appendChild(titleEl);
+        info.appendChild(metaEl);
         const actions = document.createElement('div');
         actions.className = 'clip-actions';
         const playBtn = document.createElement('button');

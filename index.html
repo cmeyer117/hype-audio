@@ -254,6 +254,10 @@
       carl:    { label: 'Carl',    emoji: '🎙️', color: 'var(--carl)' },
     };
     const PILLAR_ORDER = ['mindset', 'iron', 'faith', 'carl'];
+    // carl's home-tile images are real photos saved as .jpg; the rest are
+    // ChatGPT-generated .png -- mismatched extension/content-type silently
+    // fails to decode on iOS Safari, so this has to be exact per pillar.
+    function heroImgExt(key) { return key === 'carl' ? 'jpg' : 'png'; }
 
     // Cached in a module-level var (not re-fetched per render) — the manifest
     // never changes during a session. Starts with just a `default` entry so
@@ -312,7 +316,7 @@
           cell.style.background = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
           const img = new Image();
           img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };
-          img.src = 'images/home/' + key + '-' + n + '.png';
+          img.src = 'images/home/' + key + '-' + n + '.' + heroImgExt(key);
           panels.appendChild(cell);
         }
         tile.onclick = function () { showSection(key); };
@@ -362,7 +366,7 @@
       document.getElementById('section-title').textContent = meta.label;
       document.getElementById('section-title').style.color = meta.color;
       document.getElementById('pillar-input').value = key;
-      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1.png')";
+      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
 
       const randomBtn = document.getElementById('random-play');
       randomBtn.textContent = meta.emoji + ' PLAY RANDOM';

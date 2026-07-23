@@ -332,7 +332,7 @@
         const thumb = document.createElement('img');
         thumb.className = 'clip-thumb';
         thumb.alt = '';
-        thumb.src = 'images/clips/' + (CLIP_ART_MANIFEST[clip.mentality] || CLIP_ART_MANIFEST.default);
+        thumb.src = 'images/clips/' + (Object.hasOwn(CLIP_ART_MANIFEST, clip.mentality) ? CLIP_ART_MANIFEST[clip.mentality] : CLIP_ART_MANIFEST.default);
         const info = document.createElement('div');
         info.className = 'clip-info';
         info.innerHTML = '<div class="clip-title">' + clip.title + '</div>' +

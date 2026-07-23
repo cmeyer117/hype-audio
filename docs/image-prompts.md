@@ -91,3 +91,29 @@ Real photos, not ChatGPT-generated. `carl-1.png` is already sourced from
 `G:\My Drive\Physique\IMG_0278.jpg`. Drop 3 more into `carl-2.png`,
 `carl-3.png`, `carl-4.png` whenever you've got them — any aspect ratio
 works, `cover` crop handles it.
+
+---
+
+# Home-screen page background
+
+`index.html` sets `page-bg`'s background image on load to represent the
+whole app (not any one pillar) — currently reusing `mindset-1.png` as a
+placeholder. Replace it with one purpose-built combo image.
+
+**Portrait orientation 1024x1536px, PNG.** This renders full-viewport
+behind everything with a 70%-black tint on top for legibility, so keep
+it dramatic and dense rather than sparse — it needs to read at a glance
+behind UI, not carry fine detail.
+
+## home — `images/home/hero-combo.png`
+
+> Gritty desaturated cinematic photo collage, portrait orientation 1024x1536px, one cohesive dramatic scene blending four elements into a single unified image: a lone runner's silhouette sprinting on a dark beach at dawn, an old-school rusty barbell loaded with iron plates, a wooden cross catching warm backlight, and a single dramatic ray of light cutting through darkness representing personal discipline — all merged into one moody, high-contrast composition, not a grid or split-panel layout, subject matter concentrated in the upper two-thirds of frame, no text, no logos
+
+Once saved, change this line in `index.html`'s `showHome()`:
+```
+document.getElementById('page-bg').style.backgroundImage = "url('images/home/mindset-1.png')";
+```
+to:
+```
+document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
+```

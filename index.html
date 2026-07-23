@@ -78,6 +78,15 @@
   .tile-arrow { color: var(--text-tertiary); }
 
   /* ===== Section view ===== */
+  .section-hero {
+    position: relative; height: 200px; margin-bottom: 22px; border-radius: 20px; overflow: hidden;
+    background-color: var(--bg-card); background-size: cover; background-position: center;
+    border: 1px solid var(--border);
+  }
+  .section-hero::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.75) 75%, #0a0a0b 100%);
+  }
   .random-play {
     width: 100%; padding: 16px; margin-bottom: 22px; border: 0; border-radius: 14px;
     color: #0a0a0a; font-family: var(--font); font-weight: 700; font-size: 14px; cursor: pointer;
@@ -191,6 +200,8 @@
       <button class="back-btn" id="back-btn" type="button">←</button>
       <h1 class="view-title" id="section-title"></h1>
     </div>
+
+    <div class="section-hero" id="section-hero"></div>
 
     <button class="random-play" id="random-play" type="button"></button>
 
@@ -352,6 +363,7 @@
       document.getElementById('section-title').textContent = meta.label;
       document.getElementById('section-title').style.color = meta.color;
       document.getElementById('pillar-input').value = key;
+      document.getElementById('section-hero').style.backgroundImage = "url('images/home/" + key + "-1.png')";
 
       const randomBtn = document.getElementById('random-play');
       randomBtn.textContent = meta.emoji + ' PLAY RANDOM';

@@ -38,14 +38,22 @@ at that size.
 
 # Home-screen tile backgrounds
 
-Each of the 4 big pillar tiles on the home screen (`index.html` `.tile`
-elements) is a **2x2 photo-grid mosaic**, not one full-bleed image — comic
-panel style. The code looks for up to 4 numbered files per pillar:
+Mindset/Iron/Faith tiles on the home screen (`index.html` `.tile`
+elements) are each a **2x2 photo-grid mosaic**, not one full-bleed image —
+comic panel style. The code looks for up to 4 numbered files per pillar:
 `images/home/<pillar>-1.png` through `<pillar>-4.png`. Any slot that's
 missing just renders as an empty dark placeholder, so you can fill them in
 one at a time.
 
-**Ask ChatGPT for portrait orientation 1024x1536px, 1024x1536, for every slot.** Each
+**Carl's tile is the one exception — a single full photo, not a grid**
+(`carl-1.jpg` only; `carl-2.jpg`/`carl-3.jpg`/`carl-4.jpg` exist on disk but
+are currently unused spares). A face needs far more pixels than an object
+or mood shot to read as recognizable at real tile size, so the 4-way split
+that works for Iron/Faith/Mindset just turned Carl into an unrecognizable
+blur — confirmed via a real pixel-crop side-by-side before making the
+change, not a guess.
+
+**Ask ChatGPT for portrait orientation, 1024x1536px, for every slot.** Each
 grid cell is roughly square-to-portrait with `background-size: cover`, and
 the whole tile has a dark gradient fading the bottom ~45% to black for text
 legibility — keep each subject in the **upper half** of its own frame.

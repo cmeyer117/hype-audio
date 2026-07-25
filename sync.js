@@ -18,6 +18,12 @@
     if (SUPABASE_URL.indexOf('PASTE-') === 0 || SUPABASE_KEY.indexOf('PASTE-') === 0) return;
 
     let supa = null, pushTimer = null, suppressSync = false, lastSyncedJson = null;
+    // Nothing may push until the initial fetch has round-tripped successfully
+    // at least once. Without this, a page that never got a chance to pull
+    // real data (slow network, tab closed early) could still push its
+    // legitimately-empty local state on tab-close and overwrite good remote
+    // data with nothing -- this happened for real 2026-07-25 (see SESSION_LOG).
+    let syncReady = false;
 
     function matches(k) {
       if (!k) return false;
@@ -90,7 +96,7 @@
       return changed;
     }
     async function pushNow() {
-      if (!supa) return;
+      if (!supa || !syncReady) return;
       const state = collect();
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
@@ -104,6 +110,7 @@
     }
     function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
     function flushOnUnload() {
+      if (!syncReady) return;
       const state = collect();
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
@@ -126,11 +133,14 @@
       supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       try {
         const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
-        if (!error && data && data.data && Object.keys(data.data).length > 0) {
-          lastSyncedJson = JSON.stringify(data.data);
-          applyRemote(data.data);
-        } else if (Object.keys(collect()).length > 0) {
-          schedulePush();
+        if (!error) {
+          syncReady = true;
+          if (data && data.data && Object.keys(data.data).length > 0) {
+            lastSyncedJson = JSON.stringify(data.data);
+            applyRemote(data.data);
+          } else if (Object.keys(collect()).length > 0) {
+            schedulePush();
+          }
         }
       } catch (e) {}
       supa.channel('app_state_' + appKey)

@@ -80,7 +80,12 @@
   .tile-name {
     font-family: var(--font); font-weight: 800; font-size: 27px; text-transform: uppercase; letter-spacing: .01em;
     color: var(--text-primary); text-shadow: 3px 3px 0 rgba(0,0,0,0.8);
+    overflow-wrap: anywhere;
   }
+  /* Mentality names (Scripture, Resilience, Discipline...) run longer than the
+     short pillar names this size was tuned for -- shrink + allow mid-word
+     wrap so a single long word never overflows the tile. */
+  #subcat-tiles .tile-name { font-size: 21px; }
   .tile-footer { display: flex; align-items: center; justify-content: space-between; }
   .tile-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
   .tile-arrow { color: var(--text-tertiary); }

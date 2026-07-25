@@ -95,9 +95,31 @@
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }
       return changed;
     }
+    // None of this helper's consumers ever legitimately wipes a synced key
+    // to nothing -- deletions are always soft (a tombstone flag on an
+    // existing entry), so the array/object never actually empties out.
+    // A push that WOULD empty it is therefore always a stale/corrupted local
+    // state, never a real user action -- refuse it outright. This is the
+    // second half of the syncReady fix above: syncReady only guards the
+    // window before the first successful sync, but a local clear (e.g. a
+    // browser dev-tools command) *after* a successful sync leaves syncReady
+    // true while collect() is now empty -- confirmed to actually happen,
+    // wiping production data a second time on 2026-07-25 even with the
+    // syncReady guard already in place.
+    function isTrivial(state) {
+      const keys = Object.keys(state);
+      if (keys.length === 0) return true;
+      return keys.every(function (k) {
+        const v = state[k];
+        if (Array.isArray(v)) return v.length === 0;
+        if (v && typeof v === 'object') return Object.keys(v).length === 0;
+        return v === null || v === undefined || v === '';
+      });
+    }
     async function pushNow() {
       if (!supa || !syncReady) return;
       const state = collect();
+      if (isTrivial(state)) return;
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
       try {
@@ -112,6 +134,7 @@
     function flushOnUnload() {
       if (!syncReady) return;
       const state = collect();
+      if (isTrivial(state)) return;
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
       try {

@@ -195,6 +195,37 @@
     <div class="tiles" id="tiles"></div>
   </div>
 
+  <div id="view-subcat" style="display:none; padding: 0 10px">
+    <div class="back-row">
+      <button class="back-btn" id="subcat-back-btn" type="button">←</button>
+      <h1 class="view-title" id="subcat-title"></h1>
+    </div>
+
+    <button class="random-play" id="subcat-random-play" type="button"></button>
+
+    <details>
+      <summary>Upload a clip (new or existing mentality)</summary>
+      <form id="sc-upload-form">
+        <input type="file" id="sc-file-input" accept="audio/*" required>
+        <div class="field"><label>Title</label><input type="text" id="sc-title-input" placeholder="Title" required></div>
+        <div class="field"><label>Mentality</label><input type="text" id="sc-mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
+        <select id="sc-moment-input">
+          <option value="pre_workout">Pre-workout</option>
+          <option value="mid_set">Mid-set</option>
+          <option value="post_workout">Post-workout</option>
+        </select>
+        <select id="sc-source-input">
+          <option value="original">Original</option>
+          <option value="licensed">Licensed</option>
+          <option value="personal_use">Personal use only</option>
+        </select>
+        <button type="submit">Upload</button>
+      </form>
+    </details>
+
+    <div class="tiles" id="subcat-tiles"></div>
+  </div>
+
   <div id="view-section" style="display:none; padding: 0 10px">
     <div class="back-row">
       <button class="back-btn" id="back-btn" type="button">←</button>
@@ -268,7 +299,8 @@
       .then(function (r) { return r.json(); })
       .then(function (manifest) {
         CLIP_ART_MANIFEST = manifest;
-        if (currentView) renderSection(currentView);
+        if (currentMentality) renderSection(currentPillar, currentMentality);
+        else if (currentPillar) renderSubcats(currentPillar);
       })
       .catch(function () {});
 
@@ -281,11 +313,16 @@
         HypeAudio.migrateGogginsToMindset();
         HypeAudio.migrateCarlToOwnPillar();
         renderHome();
-        if (currentView) renderSection(currentView);
+        if (currentMentality) renderSection(currentPillar, currentMentality);
+        else if (currentPillar) renderSubcats(currentPillar);
       },
     });
 
-    let currentView = null; // null = home, else a pillar key
+    let currentPillar = null;   // null = home, else a pillar key
+    let currentMentality = null; // null = subcat screen, else inside a mentality's clip list
+
+    function mentalityLabel(m) { return m.charAt(0).toUpperCase() + m.slice(1); }
+    function mentalityArt(m) { return 'images/clips/' + (Object.hasOwn(CLIP_ART_MANIFEST, m) ? CLIP_ART_MANIFEST[m] : CLIP_ART_MANIFEST.default); }
 
     function renderHome() {
       const tiles = document.getElementById('tiles');
@@ -324,7 +361,53 @@
           img.src = 'images/home/' + key + '-' + n + '.' + heroImgExt(key);
           panels.appendChild(cell);
         }
-        tile.onclick = function () { showSection(key); };
+        tile.onclick = function () { showSubcats(key); };
+        tiles.appendChild(tile);
+      });
+    }
+
+    function renderSubcats(key) {
+      const meta = PILLARS[key];
+      document.getElementById('subcat-title').textContent = meta.label;
+      document.getElementById('subcat-title').style.color = meta.color;
+      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
+
+      const randomBtn = document.getElementById('subcat-random-play');
+      randomBtn.textContent = meta.emoji + ' PLAY RANDOM';
+      randomBtn.style.background = 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
+      randomBtn.onclick = function () {
+        const clip = HypeAudio.pickRandom({ pillar: key });
+        if (!clip) { alert('No ' + meta.label.toLowerCase() + ' clips yet — upload one in a subcategory.'); return; }
+        HypeAudio.playClip(clip);
+      };
+
+      const tiles = document.getElementById('subcat-tiles');
+      tiles.innerHTML = '';
+      const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key; });
+      const counts = {};
+      clips.forEach(function (c) { counts[c.mentality] = (counts[c.mentality] || 0) + 1; });
+      const mentalities = Object.keys(counts).sort();
+      if (!mentalities.length) {
+        tiles.innerHTML = '<div class="empty-state">No ' + meta.label.toLowerCase() + ' clips yet — upload one via a mentality tile once you add one.</div>';
+        return;
+      }
+      mentalities.forEach(function (m) {
+        const tile = document.createElement('button');
+        tile.className = 'tile';
+        tile.type = 'button';
+        tile.style.borderColor = meta.color;
+        tile.innerHTML =
+          '<div class="tile-panels"><div class="tile-panel" style="grid-column:1/-1;grid-row:1/-1;background-image:url(\'' + mentalityArt(m) + '\')"></div></div>' +
+          '<div class="tile-content">' +
+            '<div>' +
+              '<div class="tile-name" style="color:' + meta.color + '">' + mentalityLabel(m) + '</div>' +
+              '<div class="tile-footer">' +
+                '<span class="tile-count">' + counts[m] + ' clip' + (counts[m] === 1 ? '' : 's') + '</span>' +
+                '<span class="tile-arrow">→</span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        tile.onclick = function () { showSection(key, m); };
         tiles.appendChild(tile);
       });
     }
@@ -333,7 +416,7 @@
       const inner = document.getElementById('tabbar-inner');
       inner.innerHTML = '';
       const homeTab = document.createElement('button');
-      homeTab.className = 'tab' + (currentView === null ? ' active' : '');
+      homeTab.className = 'tab' + (currentPillar === null ? ' active' : '');
       homeTab.type = 'button';
       homeTab.innerHTML = '<span class="tab-emoji">🏠</span>Home';
       homeTab.onclick = function () { showHome(); };
@@ -341,53 +424,68 @@
       PILLAR_ORDER.forEach(function (key) {
         const meta = PILLARS[key];
         const tab = document.createElement('button');
-        tab.className = 'tab' + (currentView === key ? ' active' : '');
+        tab.className = 'tab' + (currentPillar === key ? ' active' : '');
         tab.type = 'button';
         tab.innerHTML = '<span class="tab-emoji">' + meta.emoji + '</span>' + meta.label;
-        tab.onclick = function () { showSection(key); };
+        tab.onclick = function () { showSubcats(key); };
         inner.appendChild(tab);
       });
     }
 
     function showHome() {
-      currentView = null;
+      currentPillar = null;
+      currentMentality = null;
       document.getElementById('view-home').style.display = '';
+      document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
       renderHome();
       renderTabbar();
     }
 
-    function showSection(key) {
-      currentView = key;
+    function showSubcats(key) {
+      currentPillar = key;
+      currentMentality = null;
       document.getElementById('view-home').style.display = 'none';
-      document.getElementById('view-section').style.display = '';
-      renderSection(key);
+      document.getElementById('view-subcat').style.display = '';
+      document.getElementById('view-section').style.display = 'none';
+      renderSubcats(key);
       renderTabbar();
     }
 
-    function renderSection(key) {
+    function showSection(key, mentality) {
+      currentPillar = key;
+      currentMentality = mentality;
+      document.getElementById('view-home').style.display = 'none';
+      document.getElementById('view-subcat').style.display = 'none';
+      document.getElementById('view-section').style.display = '';
+      renderSection(key, mentality);
+      renderTabbar();
+    }
+
+    function renderSection(key, mentality) {
       const meta = PILLARS[key];
-      document.getElementById('section-title').textContent = meta.label;
+      document.getElementById('section-title').textContent = meta.label + ' · ' + mentalityLabel(mentality);
       document.getElementById('section-title').style.color = meta.color;
       document.getElementById('pillar-input').value = key;
-      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
+      document.getElementById('mentality-input').value = mentality;
+      document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
 
       const randomBtn = document.getElementById('random-play');
       randomBtn.textContent = meta.emoji + ' PLAY RANDOM';
       randomBtn.style.background = 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
       randomBtn.onclick = function () {
-        const clip = HypeAudio.pickRandom({ pillar: key });
-        if (!clip) { alert('No ' + meta.label.toLowerCase() + ' clips yet — upload one below.'); return; }
+        const clip = HypeAudio.pickRandom({ pillar: key, mentality: mentality });
+        if (!clip) { alert('No ' + mentalityLabel(mentality) + ' clips yet — upload one below.'); return; }
         HypeAudio.playClip(clip);
-        renderSection(key);
+        renderSection(key, mentality);
       };
 
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
-      const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key; });
+      const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key && c.mentality === mentality; });
       if (!clips.length) {
-        list.innerHTML = '<div class="empty-state">No ' + meta.label.toLowerCase() + ' clips yet — upload one above.</div>';
+        list.innerHTML = '<div class="empty-state">No ' + mentalityLabel(mentality).toLowerCase() + ' clips yet — upload one above.</div>';
         return;
       }
       clips.forEach(function (clip) {
@@ -404,7 +502,7 @@
         titleEl.textContent = clip.title;
         const metaEl = document.createElement('div');
         metaEl.className = 'clip-meta';
-        metaEl.textContent = clip.mentality + ' · ' + clip.moment + ' · played ' + (clip.play_count || 0) + 'x';
+        metaEl.textContent = clip.mentality + ' · ' + clip.moment;
         info.appendChild(titleEl);
         info.appendChild(metaEl);
         const actions = document.createElement('div');
@@ -412,7 +510,7 @@
         const playBtn = document.createElement('button');
         playBtn.className = 'play-btn';
         playBtn.textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
-        playBtn.onclick = function () { HypeAudio.togglePlay(clip); renderSection(key); };
+        playBtn.onclick = function () { HypeAudio.togglePlay(clip); renderSection(key, mentality); };
 
         const menuWrap = document.createElement('div');
         menuWrap.className = 'menu-wrap';
@@ -429,7 +527,7 @@
           dropdown.classList.remove('open');
           if (!confirm('Delete "' + clip.title + '"? This can\'t be undone.')) return;
           HypeAudio.deleteClip(clip.id);
-          renderSection(key);
+          renderSection(key, mentality);
         };
         dropdown.appendChild(delItem);
         menuBtn.onclick = function (e) {
@@ -450,7 +548,8 @@
       });
     }
 
-    document.getElementById('back-btn').onclick = function () { showHome(); };
+    document.getElementById('back-btn').onclick = function () { showSubcats(currentPillar); };
+    document.getElementById('subcat-back-btn').onclick = function () { showHome(); };
 
     function closeAllMenus() {
       document.querySelectorAll('.menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); });
@@ -460,27 +559,53 @@
 
     // Keep whichever row is actually playing in sync (icon flips to ▶ again
     // once a clip ends, without polling).
-    HypeAudio.onPlaybackChange(function () { if (currentView) renderSection(currentView); });
+    HypeAudio.onPlaybackChange(function () { if (currentMentality) renderSection(currentPillar, currentMentality); });
 
-    document.getElementById('upload-form').addEventListener('submit', async function (e) {
-      e.preventDefault();
-      const file = document.getElementById('file-input').files[0];
+    // Shared by both upload forms (clip-list screen has a fixed mentality;
+    // subcat screen lets you type a brand-new one that has no tile yet).
+    async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput) {
+      const file = fileInput.files[0];
       const url = await HypeAudio.uploadClipFile(file, supa);
       if (!url) { alert('Upload failed.'); return; }
       HypeAudio.addClip({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        title: document.getElementById('title-input').value,
-        mentality: document.getElementById('mentality-input').value,
-        pillar: document.getElementById('pillar-input').value,
-        moment: document.getElementById('moment-input').value,
-        source_type: document.getElementById('source-input').value,
+        title: titleInput.value,
+        mentality: mentality,
+        pillar: pillar,
+        moment: moment,
+        source_type: source,
         storage_url: url,
         created_at: new Date().toISOString(),
         play_count: 0,
       });
-      e.target.reset();
-      document.getElementById('pillar-input').value = currentView;
-      if (currentView) renderSection(currentView);
+      form.reset();
+    }
+
+    document.getElementById('upload-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      await submitClip(
+        e.target, currentPillar, currentMentality,
+        document.getElementById('moment-input').value,
+        document.getElementById('source-input').value,
+        document.getElementById('file-input'),
+        document.getElementById('title-input')
+      );
+      document.getElementById('pillar-input').value = currentPillar;
+      document.getElementById('mentality-input').value = currentMentality;
+      renderSection(currentPillar, currentMentality);
+    });
+
+    document.getElementById('sc-upload-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const mentality = document.getElementById('sc-mentality-input').value;
+      await submitClip(
+        e.target, currentPillar, mentality,
+        document.getElementById('sc-moment-input').value,
+        document.getElementById('sc-source-input').value,
+        document.getElementById('sc-file-input'),
+        document.getElementById('sc-title-input')
+      );
+      renderSubcats(currentPillar);
     });
 
     // One-time-in-effect migrations (Goggins -> Mindset, Carl's-own-voice ->

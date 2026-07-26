@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0a0a0b">
 <title>Hype Audio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -280,6 +282,13 @@
   <script src="sync.js"></script>
   <script src="hype-audio.js"></script>
   <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  </script>
+  <script>
     const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -329,6 +338,7 @@
 
     function mentalityLabel(m) { return m.charAt(0).toUpperCase() + m.slice(1); }
     function mentalityArt(m) { return 'images/clips/' + (Object.hasOwn(CLIP_ART_MANIFEST, m) ? CLIP_ART_MANIFEST[m] : CLIP_ART_MANIFEST.default); }
+    HypeAudio.setArtworkResolver(mentalityArt);
 
     function renderHome() {
       const tiles = document.getElementById('tiles');

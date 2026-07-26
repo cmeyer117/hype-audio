@@ -73,6 +73,7 @@
   // one ends, looping until stopped. Starting either cancels the other.
   let queue = null;
   let randomFilter = null;
+  let repeatClip = null;
 
   function notifyChange() { if (onChangeCb) onChangeCb(); }
 
@@ -89,6 +90,8 @@
   function isCurrent(clipId) { return currentClipId === clipId && !!currentAudio; }
 
   function isPlayingRandom() { return !!randomFilter; }
+
+  function isPlayingRepeat(clipId) { return !!repeatClip && repeatClip.id === clipId; }
 
   // Internal: plays exactly one clip and wires its natural end to advance()
   // -- the only thing that knows about queue/randomFilter. A user pause
@@ -108,6 +111,7 @@
   }
 
   function advance() {
+    if (repeatClip) { playSingle(repeatClip); return; }
     if (queue) {
       queue.index += 1;
       if (queue.index < queue.clips.length) { playSingle(queue.clips[queue.index]); return; }
@@ -123,6 +127,16 @@
   function playClip(clip) {
     queue = null;
     randomFilter = null;
+    repeatClip = null;
+    return playSingle(clip);
+  }
+
+  // Repeats one clip over and over until stopPlayback() or a different
+  // clip/mode is chosen.
+  function playRepeat(clip) {
+    queue = null;
+    randomFilter = null;
+    repeatClip = clip;
     return playSingle(clip);
   }
 
@@ -133,6 +147,7 @@
     const idx = clips.findIndex(function (c) { return c.id === clipId; });
     if (idx === -1) return null;
     randomFilter = null;
+    repeatClip = null;
     queue = { clips: clips, index: idx };
     return playSingle(clips[idx]);
   }
@@ -142,6 +157,7 @@
   // or a different clip is explicitly chosen.
   function playRandomLoop(filter) {
     queue = null;
+    repeatClip = null;
     const clip = pickRandom(filter);
     if (!clip) { randomFilter = null; return null; }
     randomFilter = filter || {};
@@ -151,6 +167,7 @@
   function stopPlayback() {
     queue = null;
     randomFilter = null;
+    repeatClip = null;
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     currentAudio = null;
     currentClipId = null;
@@ -223,11 +240,13 @@
       playClip: playClip,
       playFromList: playFromList,
       playRandomLoop: playRandomLoop,
+      playRepeat: playRepeat,
       stopPlayback: stopPlayback,
       togglePlay: togglePlay,
       isPlaying: isPlaying,
       isCurrent: isCurrent,
       isPlayingRandom: isPlayingRandom,
+      isPlayingRepeat: isPlayingRepeat,
       onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
       migrateGogginsToMindset: migrateGogginsToMindset,

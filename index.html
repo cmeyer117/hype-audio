@@ -143,6 +143,7 @@
     color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
   .clip-actions .play-btn:hover { background: rgba(255,255,255,0.1); }
+  .clip-actions .play-btn.repeat-active { background: rgba(255,255,255,0.18); border-color: var(--text-primary); }
   /* Delete lives inside this menu, not as its own visible icon — the whole
      point is it should never be a fat-finger accident: open the menu, then
      confirm() on top of that. */
@@ -527,6 +528,16 @@
           renderSection(key, mentality);
         };
 
+        const repeatBtn = document.createElement('button');
+        repeatBtn.className = 'play-btn' + (HypeAudio.isPlayingRepeat(clip.id) ? ' repeat-active' : '');
+        repeatBtn.title = 'Repeat this clip';
+        repeatBtn.textContent = HypeAudio.isPlayingRepeat(clip.id) ? '■' : '🔁';
+        repeatBtn.onclick = function () {
+          if (HypeAudio.isPlayingRepeat(clip.id)) { HypeAudio.stopPlayback(); }
+          else { HypeAudio.playRepeat(clip); }
+          renderSection(key, mentality);
+        };
+
         const menuWrap = document.createElement('div');
         menuWrap.className = 'menu-wrap';
         const menuBtn = document.createElement('button');
@@ -555,6 +566,7 @@
         menuWrap.appendChild(dropdown);
 
         actions.appendChild(playBtn);
+        actions.appendChild(repeatBtn);
         actions.appendChild(menuWrap);
         row.appendChild(thumb);
         row.appendChild(info);

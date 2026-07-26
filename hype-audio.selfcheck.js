@@ -63,4 +63,69 @@ assertEqual(HypeAudio.listClips().find((c) => c.id === '5').pillar, 'iron', 'non
 HypeAudio.migrateCarlToOwnPillar();
 assertEqual(HypeAudio.listClips().find((c) => c.id === '6').pillar, 'carl', 'migration is idempotent');
 
+// mediaSessionNext / mediaSessionPrevious -- pure decision functions for
+// lock-screen skip buttons, mode-aware across the three play modes.
+const queueState = { clips: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], index: 0 };
+
+// Sequential (queue) mode
+assertEqual(
+  HypeAudio.mediaSessionNext(queueState, null, null),
+  { type: 'clip', clip: { id: 'b' }, index: 1 },
+  'nexttrack in sequential mode advances to the next clip in the queue'
+);
+assertEqual(
+  HypeAudio.mediaSessionNext({ clips: [{ id: 'a' }, { id: 'b' }], index: 1 }, null, null),
+  { type: 'none' },
+  'nexttrack at the end of the queue does nothing'
+);
+assertEqual(
+  HypeAudio.mediaSessionPrevious(queueState, null, null, 5),
+  { type: 'restart' },
+  'previoustrack more than 3s into a clip restarts it instead of going back'
+);
+assertEqual(
+  HypeAudio.mediaSessionPrevious(queueState, null, null, 1),
+  { type: 'restart' },
+  'previoustrack within 3s at the start of the queue restarts the current (first) clip'
+);
+assertEqual(
+  HypeAudio.mediaSessionPrevious({ clips: [{ id: 'a' }, { id: 'b' }], index: 1 }, null, null, 1),
+  { type: 'clip', clip: { id: 'a' }, index: 0 },
+  'previoustrack within 3s and not at the start goes back one clip'
+);
+
+// Random loop mode
+const randomNext = HypeAudio.mediaSessionNext(null, { pillar: 'mindset' }, null);
+assertEqual(randomNext.type, 'clip', 'nexttrack in random-loop mode returns a fresh clip from the filter');
+assertEqual(randomNext.index, null, 'nexttrack in random-loop mode has no queue index to update');
+assertEqual(
+  HypeAudio.mediaSessionNext(null, { pillar: 'nonexistent-pillar' }, null),
+  { type: 'none' },
+  'nexttrack in random-loop mode with no matching clips does nothing'
+);
+assertEqual(
+  HypeAudio.mediaSessionPrevious(null, { pillar: 'mindset' }, null, 1),
+  { type: 'none' },
+  'previoustrack in random-loop mode does nothing -- no meaningful "previous" in an infinite random stream'
+);
+
+// Repeat mode
+assertEqual(
+  HypeAudio.mediaSessionNext(null, null, { id: 'a' }),
+  { type: 'restart' },
+  'nexttrack in repeat mode restarts the current clip rather than skipping'
+);
+assertEqual(
+  HypeAudio.mediaSessionPrevious(null, null, { id: 'a' }, 1),
+  { type: 'restart' },
+  'previoustrack in repeat mode restarts the current clip'
+);
+
+// No active mode
+assertEqual(
+  HypeAudio.mediaSessionNext(null, null, null),
+  { type: 'none' },
+  'nexttrack with no active play mode does nothing'
+);
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

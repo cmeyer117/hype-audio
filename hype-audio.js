@@ -67,6 +67,12 @@
   let currentAudio = null;
   let currentClipId = null;
   let onChangeCb = null;
+  // Auto-advance state: at most one of these is active at a time. `queue` is
+  // a fixed snapshot (list + position) for "play down the list from here";
+  // `randomFilter` re-picks a new random clip matching the filter every time
+  // one ends, looping until stopped. Starting either cancels the other.
+  let queue = null;
+  let randomFilter = null;
 
   function notifyChange() { if (onChangeCb) onChangeCb(); }
 
@@ -78,22 +84,82 @@
     return currentClipId === clipId && !!currentAudio && !currentAudio.paused;
   }
 
-  function playClip(clip) {
+  // Unlike isPlaying(), true whether the clip is playing OR paused -- used to
+  // tell "resume/pause this row" apart from "start a fresh queue from here".
+  function isCurrent(clipId) { return currentClipId === clipId && !!currentAudio; }
+
+  function isPlayingRandom() { return !!randomFilter; }
+
+  // Internal: plays exactly one clip and wires its natural end to advance()
+  // -- the only thing that knows about queue/randomFilter. A user pause
+  // never advances (onpause isn't wired to it), only a clip actually ending.
+  function playSingle(clip) {
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
     currentClipId = clip.id;
     audio.onplay = notifyChange;
     audio.onpause = notifyChange;
-    audio.onended = function () { currentClipId = null; notifyChange(); };
+    audio.onended = function () { currentClipId = null; advance(); };
     audio.play().catch(function () {});
     updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
+    notifyChange();
     return audio;
   }
 
+  function advance() {
+    if (queue) {
+      queue.index += 1;
+      if (queue.index < queue.clips.length) { playSingle(queue.clips[queue.index]); return; }
+      queue = null;
+    } else if (randomFilter) {
+      const next = pickRandom(randomFilter);
+      if (next) { playSingle(next); return; }
+      randomFilter = null;
+    }
+    notifyChange();
+  }
+
+  function playClip(clip) {
+    queue = null;
+    randomFilter = null;
+    return playSingle(clip);
+  }
+
+  // Plays clipId and continues sequentially through the rest of `clips`
+  // (the exact array passed in, e.g. the currently-rendered/filtered list)
+  // until it reaches the end or gets interrupted.
+  function playFromList(clips, clipId) {
+    const idx = clips.findIndex(function (c) { return c.id === clipId; });
+    if (idx === -1) return null;
+    randomFilter = null;
+    queue = { clips: clips, index: idx };
+    return playSingle(clips[idx]);
+  }
+
+  // Starts (or restarts) an endless random loop within `filter` -- a new
+  // random pick plays every time the previous one ends, until stopPlayback()
+  // or a different clip is explicitly chosen.
+  function playRandomLoop(filter) {
+    queue = null;
+    const clip = pickRandom(filter);
+    if (!clip) { randomFilter = null; return null; }
+    randomFilter = filter || {};
+    return playSingle(clip);
+  }
+
+  function stopPlayback() {
+    queue = null;
+    randomFilter = null;
+    if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
+    currentAudio = null;
+    currentClipId = null;
+    notifyChange();
+  }
+
   // Play/pause toggle for a specific clip row: resumes in place if it's the
-  // currently-loaded clip, starts fresh (stopping whatever else is playing)
-  // otherwise.
+  // currently-loaded clip, starts fresh (stopping whatever else is playing,
+  // no queue/loop) otherwise.
   function togglePlay(clip) {
     if (currentClipId === clip.id && currentAudio) {
       if (currentAudio.paused) { currentAudio.play().catch(function () {}); }
@@ -155,8 +221,13 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       playClip: playClip,
+      playFromList: playFromList,
+      playRandomLoop: playRandomLoop,
+      stopPlayback: stopPlayback,
       togglePlay: togglePlay,
       isPlaying: isPlaying,
+      isCurrent: isCurrent,
+      isPlayingRandom: isPlayingRandom,
       onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
       migrateGogginsToMindset: migrateGogginsToMindset,

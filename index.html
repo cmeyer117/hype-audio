@@ -378,12 +378,14 @@
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
 
       const randomBtn = document.getElementById('subcat-random-play');
-      randomBtn.textContent = meta.emoji + ' PLAY RANDOM';
-      randomBtn.style.background = 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
+      const randomActive = HypeAudio.isPlayingRandom();
+      randomBtn.textContent = randomActive ? '■ STOP' : meta.emoji + ' PLAY RANDOM';
+      randomBtn.style.background = randomActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
       randomBtn.onclick = function () {
-        const clip = HypeAudio.pickRandom({ pillar: key });
+        if (HypeAudio.isPlayingRandom()) { HypeAudio.stopPlayback(); renderSubcats(key); return; }
+        const clip = HypeAudio.playRandomLoop({ pillar: key });
         if (!clip) { alert('No ' + meta.label.toLowerCase() + ' clips yet — upload one in a subcategory.'); return; }
-        HypeAudio.playClip(clip);
+        renderSubcats(key);
       };
 
       const tiles = document.getElementById('subcat-tiles');
@@ -477,12 +479,13 @@
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
 
       const randomBtn = document.getElementById('random-play');
-      randomBtn.textContent = meta.emoji + ' PLAY RANDOM';
-      randomBtn.style.background = 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
+      const randomActive = HypeAudio.isPlayingRandom();
+      randomBtn.textContent = randomActive ? '■ STOP' : meta.emoji + ' PLAY RANDOM';
+      randomBtn.style.background = randomActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
       randomBtn.onclick = function () {
-        const clip = HypeAudio.pickRandom({ pillar: key, mentality: mentality });
+        if (HypeAudio.isPlayingRandom()) { HypeAudio.stopPlayback(); renderSection(key, mentality); return; }
+        const clip = HypeAudio.playRandomLoop({ pillar: key, mentality: mentality });
         if (!clip) { alert('No ' + mentalityLabel(mentality) + ' clips yet — upload one below.'); return; }
-        HypeAudio.playClip(clip);
         renderSection(key, mentality);
       };
 
@@ -515,7 +518,14 @@
         const playBtn = document.createElement('button');
         playBtn.className = 'play-btn';
         playBtn.textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
-        playBtn.onclick = function () { HypeAudio.togglePlay(clip); renderSection(key, mentality); };
+        playBtn.onclick = function () {
+          // Currently-loaded clip: plain pause/resume, keeps its place in the
+          // list-descent. A different clip: start playing down the list from
+          // here (cancels any random loop -- "or choose one myself").
+          if (HypeAudio.isCurrent(clip.id)) { HypeAudio.togglePlay(clip); }
+          else { HypeAudio.playFromList(clips, clip.id); }
+          renderSection(key, mentality);
+        };
 
         const menuWrap = document.createElement('div');
         menuWrap.className = 'menu-wrap';
@@ -564,7 +574,10 @@
 
     // Keep whichever row is actually playing in sync (icon flips to ▶ again
     // once a clip ends, without polling).
-    HypeAudio.onPlaybackChange(function () { if (currentMentality) renderSection(currentPillar, currentMentality); });
+    HypeAudio.onPlaybackChange(function () {
+      if (currentMentality) renderSection(currentPillar, currentMentality);
+      else if (currentPillar) renderSubcats(currentPillar);
+    });
 
     // Shared by both upload forms (clip-list screen has a fixed mentality;
     // subcat screen lets you type a brand-new one that has no tile yet).

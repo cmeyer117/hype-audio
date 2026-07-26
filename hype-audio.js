@@ -172,9 +172,15 @@
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
     currentClipId = clip.id;
+    updateMediaSessionMetadata(clip);
     audio.onplay = notifyChange;
     audio.onpause = notifyChange;
     audio.onended = function () { currentClipId = null; advance(); };
+    audio.onerror = function () {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        alert('This clip isn\'t downloaded yet -- needs a connection to play for the first time.');
+      }
+    };
     audio.play().catch(function () {});
     updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
     notifyChange();
@@ -326,6 +332,7 @@
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };
+    setupMediaSessionHandlers();
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {

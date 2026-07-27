@@ -169,4 +169,21 @@ assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), false, 'a pill
 HypeAudio.stopPlayback();
 assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), false, 'isPlayingRandomFilter is false once playback is stopped');
 
+// searchClips -- case-insensitive substring across title + transcript_text
+HypeAudio.addClip({ id: 'search1', title: 'Discipline Equals Freedom', mentality: 'goggins', play_count: 0 });
+HypeAudio.addClip({ id: 'search2', title: 'Untitled', mentality: 'dorian', transcript_text: 'Stay hard no matter what happens', play_count: 0 });
+assertEqual(HypeAudio.searchClips('freedom').map(c => c.id), ['search1'], 'searchClips matches on title, case-insensitive');
+assertEqual(HypeAudio.searchClips('STAY HARD').map(c => c.id), ['search2'], 'searchClips matches on transcript_text, case-insensitive');
+assertEqual(HypeAudio.searchClips('nonexistent phrase'), [], 'searchClips returns [] when nothing matches');
+assertEqual(HypeAudio.searchClips(''), [], 'searchClips returns [] for an empty query');
+HypeAudio.addClip({ id: 'search3', title: null, mentality: 'dorian', transcript_text: 123, play_count: 0 });
+assertEqual(HypeAudio.searchClips('anything').map(c => c.id).indexOf('search3'), -1, 'searchClips ignores clips with non-string title/transcript_text instead of throwing');
+
+// quotePreview -- truncation + graceful absence
+const longClip = { transcript_text: 'a'.repeat(100) };
+assertEqual(HypeAudio.quotePreview(longClip, 10).length, 11, 'quotePreview truncates to maxLen + ellipsis char');
+assertEqual(HypeAudio.quotePreview({ transcript_text: 'short' }, 80), 'short', 'quotePreview returns full text when under maxLen');
+assertEqual(HypeAudio.quotePreview({}, 80), null, 'quotePreview returns null with no transcript_text');
+assertEqual(HypeAudio.quotePreview({ transcript_text: 'hello world' }, 0), '…', 'quotePreview with maxLen:0 truncates immediately rather than using the 80-char default');
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

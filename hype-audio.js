@@ -62,6 +62,33 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // Case-insensitive substring match across title + transcript_text. A
+  // personal library of ~1000 clips doesn't need fuzzy-search infra --
+  // this is deliberately simple.
+  function searchClips(query) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return [];
+    return listActiveClips().filter(function (c) {
+      return (typeof c.title === 'string' && c.title.toLowerCase().indexOf(q) !== -1) ||
+             (typeof c.transcript_text === 'string' && c.transcript_text.toLowerCase().indexOf(q) !== -1);
+    });
+  }
+
+  // Same first-segment-style truncation the migration uses for
+  // suggested_title, applied here to transcript_text for the per-row
+  // preview -- consistent presentation between the two.
+  function quotePreview(clip, maxLen) {
+    // typeof check, not `maxLen || 80` -- a caller explicitly passing 0
+    // would otherwise silently get the 80-char default instead of an
+    // empty/immediate truncation.
+    if (typeof maxLen !== 'number') maxLen = 80;
+    if (typeof clip.transcript_text !== 'string' || !clip.transcript_text) return null;
+    const text = clip.transcript_text.trim();
+    if (text.length <= maxLen) return text;
+    const truncated = text.slice(0, maxLen).replace(/\s+\S*$/, '');
+    return (truncated || text.slice(0, maxLen)) + '…';
+  }
+
   // Rest-timer "hype me up" button: prefers a mid_set-tagged clip; falls
   // back to the same iron/mindset/carl pillar pool the "Hype Me Up" home
   // button already draws from, so the button isn't dead on arrival while
@@ -365,6 +392,8 @@
       updateClip: updateClip,
       deleteClip: deleteClip,
       pickRandom: pickRandom,
+      searchClips: searchClips,
+      quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,
@@ -399,6 +428,8 @@
       updateClip: updateClip,
       deleteClip: deleteClip,
       pickRandom: pickRandom,
+      searchClips: searchClips,
+      quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,

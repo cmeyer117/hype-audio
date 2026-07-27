@@ -212,6 +212,7 @@
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
     <div class="tiles" id="tiles"></div>
+    <div class="moment-row" id="moment-row"></div>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -390,6 +391,28 @@
         }
         tile.onclick = function () { showSubcats(key); };
         tiles.appendChild(tile);
+      });
+
+      const MOMENTS = [
+        { key: 'pre_workout', label: 'Pre' },
+        { key: 'mid_set', label: 'Mid-Set' },
+        { key: 'post_workout', label: 'Post' },
+      ];
+      const momentRow = document.getElementById('moment-row');
+      momentRow.innerHTML = '';
+      MOMENTS.forEach(function (m) {
+        const active = HypeAudio.isPlayingMoment(m.key);
+        const btn = document.createElement('button');
+        btn.className = 'moment-btn' + (active ? ' active' : '');
+        btn.type = 'button';
+        btn.textContent = active ? '■ STOP' : m.label;
+        btn.onclick = function () {
+          if (HypeAudio.isPlayingMoment(m.key)) { HypeAudio.stopPlayback(); renderHome(); return; }
+          const clip = HypeAudio.playRandomLoop({ moment: m.key });
+          if (!clip) { alert('No ' + m.label.toLowerCase() + ' clips yet.'); return; }
+          renderHome();
+        };
+        momentRow.appendChild(btn);
       });
     }
 

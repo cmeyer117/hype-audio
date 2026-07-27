@@ -17,7 +17,7 @@
 
   function addClip(meta) {
     const clips = listClips();
-    clips.push(meta);
+    clips.push(Object.assign({ updated_at: Date.now() }, meta));
     saveClips(clips);
   }
 
@@ -25,7 +25,7 @@
     const clips = listClips();
     const idx = clips.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    clips[idx] = Object.assign({}, clips[idx], patch);
+    clips[idx] = Object.assign({}, clips[idx], patch, { updated_at: Date.now() });
     saveClips(clips);
   }
 
@@ -42,7 +42,7 @@
     const clips = listClips();
     const idx = clips.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    clips[idx] = Object.assign({}, clips[idx], { deleted: true, deleted_at: Date.now() });
+    clips[idx] = Object.assign({}, clips[idx], { deleted: true, deleted_at: Date.now(), updated_at: Date.now() });
     saveClips(clips);
   }
 

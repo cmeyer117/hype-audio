@@ -65,12 +65,22 @@
       for (const entry of [...remoteArr, ...localArr]) {
         const key = entry && typeof entry === 'object' && 'id' in entry ? entry.id : JSON.stringify(entry);
         const existing = byKey.get(key);
-        // First-seen wins (remote preferred), except a tombstone (entry.deleted)
-        // always wins over a non-tombstoned duplicate — a delete that hasn't
-        // round-tripped to this side yet shouldn't get merged away.
-        if (!existing || (entry && entry.deleted && !(existing && existing.deleted))) {
-          byKey.set(key, entry);
-        }
+        if (!existing) { byKey.set(key, entry); continue; }
+        // A tombstone (entry.deleted) always wins over a non-tombstoned
+        // duplicate — a delete that hasn't round-tripped to this side yet
+        // shouldn't get merged away.
+        const existingDeleted = !!(existing && existing.deleted);
+        const entryDeleted = !!(entry && entry.deleted);
+        if (entryDeleted && !existingDeleted) { byKey.set(key, entry); continue; }
+        if (existingDeleted && !entryDeleted) continue;
+        // Otherwise last-write-wins by updated_at (a plain "remote wins"
+        // silently clobbered any local edit -- e.g. a favorite toggle --
+        // that hadn't round-tripped yet, including from a second writer
+        // like Row's mini-player sharing this same key). Missing
+        // updated_at (older entries) sorts as oldest.
+        const existingTs = (existing && existing.updated_at) || 0;
+        const entryTs = (entry && entry.updated_at) || 0;
+        if (entryTs > existingTs) byKey.set(key, entry);
       }
       return Array.from(byKey.values());
     }

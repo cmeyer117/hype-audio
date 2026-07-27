@@ -62,6 +62,31 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  // Rest-timer "hype me up" button: prefers a mid_set-tagged clip; falls
+  // back to the same iron/mindset/carl pillar pool the "Hype Me Up" home
+  // button already draws from, so the button isn't dead on arrival while
+  // the mid_set pool is still empty (see docs/superpowers/specs/2026-07-27-hype-audio-row-fusion-design.md).
+  function pickMidSetClip() {
+    return pickRandom({ moment: 'mid_set' }) || pickRandom({ pillar: ['iron', 'mindset', 'carl'] });
+  }
+
+  // 2026-07-27: Carl decided he wants this on immediately (no tap needed) --
+  // the mid-set hype clip and PR rant now auto-play as soon as a set is
+  // logged. gym.html's startRestTimer is the call site that reads this flag.
+  const AUTO_PLAY_HYPE = true;
+
+  function playMidSetHype() {
+    const clip = pickMidSetClip();
+    if (clip) playClip(clip);
+    return clip;
+  }
+
+  function playPrRant() {
+    const clip = pickRandom({ pillar: 'carl' });
+    if (clip) playClip(clip);
+    return clip;
+  }
+
   // Only one clip should ever be audible at once — module-level handle so a
   // second playClip() call stops whatever's already playing instead of layering.
   let currentAudio = null;
@@ -192,7 +217,15 @@
     currentAudio = audio;
     currentClipId = clip.id;
     updateMediaSessionMetadata(clip);
-    audio.onplay = notifyChange;
+    // play_count increments on the real onplay event, not right after calling
+    // .play() -- that promise can reject (autoplay policy, offline, a bad
+    // storage_url) with no audio ever actually starting, which used to still
+    // count as a play every time (caught in Codex review, worse now that
+    // auto-play fires this on every logged set instead of only a manual tap).
+    audio.onplay = function () {
+      updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
+      notifyChange();
+    };
     audio.onpause = notifyChange;
     audio.onended = function () { currentClipId = null; advance(); };
     audio.onerror = function () {
@@ -201,7 +234,6 @@
       }
     };
     audio.play().catch(function () {});
-    updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
     notifyChange();
     return audio;
   }
@@ -333,6 +365,10 @@
       updateClip: updateClip,
       deleteClip: deleteClip,
       pickRandom: pickRandom,
+      pickMidSetClip: pickMidSetClip,
+      AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
+      playMidSetHype: playMidSetHype,
+      playPrRant: playPrRant,
       playClip: playClip,
       playFromList: playFromList,
       playRandomLoop: playRandomLoop,
@@ -363,6 +399,10 @@
       updateClip: updateClip,
       deleteClip: deleteClip,
       pickRandom: pickRandom,
+      pickMidSetClip: pickMidSetClip,
+      AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
+      playMidSetHype: playMidSetHype,
+      playPrRant: playPrRant,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
       playRandomLoop: playRandomLoop,

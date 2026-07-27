@@ -280,6 +280,36 @@
       </form>
     </details>
 
+    <details id="record-clip-details" style="display:none">
+      <summary>Record a clip</summary>
+      <div id="record-idle" style="padding: 14px 16px 16px">
+        <button type="button" class="record-btn" id="record-start-btn">🎙️ Record</button>
+      </div>
+      <div id="record-active" style="display:none; padding: 14px 16px 16px; align-items: center; gap: 10px;">
+        <span id="record-elapsed" style="font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary);">0:00</span>
+        <button type="button" class="record-btn" id="record-stop-btn">⏹ Stop</button>
+      </div>
+      <div id="record-preview" style="display:none; padding: 14px 16px 16px; flex-direction: column; gap: 10px;">
+        <audio controls id="record-preview-audio" style="width: 100%"></audio>
+        <button type="button" class="record-btn" id="record-rerecord-btn">🔁 Re-record</button>
+      </div>
+      <form id="record-save-form" style="display:none">
+        <div class="field"><label>Title</label><input type="text" id="record-title-input" placeholder="Title" required></div>
+        <div class="field"><label>Mentality</label><input type="text" id="record-mentality-input" placeholder="e.g. drive, discipline" required></div>
+        <select id="record-moment-input">
+          <option value="pre_workout">Pre-workout</option>
+          <option value="mid_set">Mid-set</option>
+          <option value="post_workout">Post-workout</option>
+        </select>
+        <select id="record-source-input">
+          <option value="personal_use" selected>Personal use only</option>
+          <option value="original">Original</option>
+          <option value="licensed">Licensed</option>
+        </select>
+        <button type="submit">Save</button>
+      </form>
+    </details>
+
     <div class="section-label">Library</div>
     <div id="clip-list"></div>
   </div>

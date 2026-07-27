@@ -91,5 +91,55 @@
       "filtered-66881CF3-7B62-4D69-95CD-BF9BBBE267AE": { "start_anchor": "giving it years", "end_anchor": null },
       "filtered-A33611DD-529C-4CE7-8352-97BAFDA24515": { "start_anchor": "all the fucking mind", "end_anchor": null }
     }
+  },
+  "new_rants": {
+    "pillar_default": "iron",
+    "mentality": "carl",
+    "faith_pillar": [
+      "2BA5CEF7-2F11-42DC-A1A2-DC9C317D2FAE",
+      "400A17DF-6724-4B8F-8BF2-0611975BBAA9",
+      "5EAE3616-2EDC-4922-B44E-62405DAAE8FE",
+      "A3DCE68F-9E2A-4ADD-9FA6-B931861D51E1",
+      "D3FF0D84-B9F8-4F0E-8738-BD7A7EECE60B",
+      "FA0C54F2-2BE5-4E08-BB8A-4D3EC4D33D3D",
+      "filtered-0FB80621-A047-4305-8131-573A3FEEB5B2",
+      "filtered-2F506084-290D-4497-A321-53E030EE6720"
+    ],
+    "keep": [
+      "132A0D72-7E03-40F8-981D-0BA1CD6C3626",
+      "1B838E6D-C72A-446D-A96C-ED1A0DA351B4",
+      "28025491-821E-40D5-B503-B11733EDF3C2",
+      "2BA5CEF7-2F11-42DC-A1A2-DC9C317D2FAE",
+      "2C175EE5-17F7-434F-88EF-8FEE38545AEA",
+      "400A17DF-6724-4B8F-8BF2-0611975BBAA9",
+      "4464BC99-4F59-45C1-8511-5DBB07184C5B",
+      "5EAE3616-2EDC-4922-B44E-62405DAAE8FE",
+      "65A9AFA0-FC53-43E5-966C-AEDE369C234B",
+      "6A9D8FEE-F87F-4A8E-BA75-2015E31F6BA6",
+      "6DE8EEFF-9F7E-40D2-91C4-07C4E33056D5",
+      "7AD86ED3-D407-4386-8536-E401DEC603FD",
+      "85672C04-220D-4EAD-A7D8-72E4A8442333",
+      "8DBEF40F-0E83-49EF-89A0-717F0B19294B",
+      "8FFAC5D9-1325-4FC7-A564-F844AFFF3896",
+      "9ED696CB-5A4E-4EAC-BF79-BF5F4AF4E4B1",
+      "A3DCE68F-9E2A-4ADD-9FA6-B931861D51E1",
+      "B40659DE-B7A2-4DE1-B1DF-CFE7B907FD28",
+      "DD2FD175-975D-44CF-BD04-03F3374556EC",
+      "E3714CDB-D8B4-46D5-AE2A-DB5884136F19",
+      "FA0C54F2-2BE5-4E08-BB8A-4D3EC4D33D3D",
+      "FD2CAFAE-5832-4BEA-BB63-36D788650648",
+      "filtered-076FEC96-91AD-4924-8E50-595CEF441404",
+      "filtered-0FB80621-A047-4305-8131-573A3FEEB5B2",
+      "filtered-10AA839E-511F-4648-861D-4F159E971986",
+      "filtered-12873C4E-C957-4235-B0EF-8C269C5C0856",
+      "filtered-2F506084-290D-4497-A321-53E030EE6720",
+      "filtered-5A1EA090-3743-4AFD-8105-6AD0279D73A1"
+    ],
+    "trim": {
+      "7B9156B2-37CE-4AB9-8EC1-D1B61144D10C": { "start_anchor": "how grateful I am to be alive", "end_anchor": null },
+      "A520C4E6-B189-49DA-8B59-B57E6A2ED007": { "start_anchor": "there's an energy that's deep inside you", "end_anchor": "could be fucking something man" },
+      "D3FF0D84-B9F8-4F0E-8738-BD7A7EECE60B": { "start_anchor": "I'll be fucking damned if I won't be fucking great", "end_anchor": "the beauty" },
+      "IMG_0842": { "start_anchor": null, "end_anchor": "the secrets of life" }
+    }
   }
 }

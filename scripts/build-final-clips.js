@@ -10,6 +10,7 @@ const path = require('path');
 const CUR = JSON.parse(fs.readFileSync(path.join(__dirname, 'curation.json'), 'utf8'));
 const GOG_SEG = JSON.parse(fs.readFileSync(path.join(__dirname, 'output', 'goggins-segments.json'), 'utf8'));
 const RANT_SEG = JSON.parse(fs.readFileSync(path.join(__dirname, 'output', 'rants-segments.json'), 'utf8'));
+const NEW_RANT_SEG = JSON.parse(fs.readFileSync(path.join(__dirname, 'output', 'new-rants-segments.json'), 'utf8'));
 const MUSIC_BED = path.join(__dirname, 'assets', 'apalonbeats-dark-cinematic-566684.mp3');
 const OUT_DIR = path.join(__dirname, 'output', 'final-clips');
 const MANIFEST_OUT = path.join(__dirname, 'output', 'final-manifest.json');
@@ -81,13 +82,15 @@ function trimAndMixGoggins(base, start, end, outPath) {
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
 }
 
-function trimRant(base, start, end, outPath) {
-  const srcPath = path.join(__dirname, 'output', 'rants', base + '.mp3');
-  execFileSync('ffmpeg', [
-    '-y', '-i', srcPath,
-    '-af', `atrim=${start}:${end},asetpts=PTS-STARTPTS,afade=t=out:st=${Math.max(0, end - start - 1)}:d=1`,
-    '-acodec', 'libmp3lame', '-q:a', '2', outPath,
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+function trimRantFrom(audioDir) {
+  return (base, start, end, outPath) => {
+    const srcPath = path.join(__dirname, 'output', audioDir, base + '.mp3');
+    execFileSync('ffmpeg', [
+      '-y', '-i', srcPath,
+      '-af', `atrim=${start}:${end},asetpts=PTS-STARTPTS,afade=t=out:st=${Math.max(0, end - start - 1)}:d=1`,
+      '-acodec', 'libmp3lame', '-q:a', '2', outPath,
+    ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  };
 }
 
 const manifest = [];
@@ -121,7 +124,8 @@ function processGroup(groupName, group, segList, mixFn) {
 }
 
 processGroup('goggins', CUR.goggins, GOG_SEG, trimAndMixGoggins);
-processGroup('rants  ', CUR.rants, RANT_SEG, trimRant);
+processGroup('rants  ', CUR.rants, RANT_SEG, trimRantFrom('rants'));
+processGroup('new_rants', CUR.new_rants, NEW_RANT_SEG, trimRantFrom('new_rants'));
 
 fs.writeFileSync(MANIFEST_OUT, JSON.stringify(manifest, null, 2));
 console.log(`\nDone. ${manifest.length} clips in ${OUT_DIR}, manifest at ${MANIFEST_OUT}`);

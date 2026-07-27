@@ -30,7 +30,11 @@ async function main() {
 
   const newClips = [];
   for (const item of manifest) {
-    const id = 'clip_' + path.basename(item.localFile, path.extname(item.localFile)).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    // item.id is the canonical id from build-final-clips.js's manifest
+    // (already "clip_"-prefixed there); only derive one as a fallback for
+    // manifests that don't carry it, without double-prefixing.
+    const base = path.basename(item.localFile, path.extname(item.localFile)).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const id = item.id || (base.startsWith('clip_') ? base : 'clip_' + base);
     if (existingIds.has(id)) {
       console.log('skip (already uploaded):', id);
       continue;
@@ -51,6 +55,7 @@ async function main() {
       id,
       title: item.title,
       mentality: item.mentality,
+      pillar: item.pillar,
       moment: item.moment,
       source_type: item.source_type,
       storage_url: pub.publicUrl,

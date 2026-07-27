@@ -99,6 +99,17 @@
     return !!randomFilter && randomFilter.moment === moment && !randomFilter.pillar;
   }
 
+  // Exact-match check for a specific PLAY RANDOM button (a pillar's own, or
+  // a mentality-scoped one within it) -- distinct from isPlayingRandom(),
+  // which is just !!randomFilter and can't tell "this exact filter" from
+  // "any random loop at all" (e.g. a moment-mode loop, or a more/less
+  // specific filter within the same pillar).
+  function isPlayingRandomFilter(filter) {
+    if (!randomFilter) return false;
+    filter = filter || {};
+    return randomFilter.pillar === filter.pillar && randomFilter.mentality === filter.mentality && randomFilter.moment === filter.moment;
+  }
+
   function isPlayingRepeat(clipId) { return !!repeatClip && repeatClip.id === clipId; }
 
   // Pure decision functions for lock-screen (Media Session) skip buttons.
@@ -332,6 +343,7 @@
       isCurrent: isCurrent,
       isPlayingRandom: isPlayingRandom,
       isPlayingMoment: isPlayingMoment,
+      isPlayingRandomFilter: isPlayingRandomFilter,
       isPlayingRepeat: isPlayingRepeat,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
@@ -356,6 +368,7 @@
       playRandomLoop: playRandomLoop,
       stopPlayback: stopPlayback,
       isPlayingMoment: isPlayingMoment,
+      isPlayingRandomFilter: isPlayingRandomFilter,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };

@@ -423,11 +423,11 @@
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
 
       const randomBtn = document.getElementById('subcat-random-play');
-      const randomActive = HypeAudio.isPlayingRandom();
+      const randomActive = HypeAudio.isPlayingRandomFilter({ pillar: key });
       randomBtn.textContent = randomActive ? '■ STOP' : meta.emoji + ' PLAY RANDOM';
       randomBtn.style.background = randomActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
       randomBtn.onclick = function () {
-        if (HypeAudio.isPlayingRandom()) { HypeAudio.stopPlayback(); renderSubcats(key); return; }
+        if (HypeAudio.isPlayingRandomFilter({ pillar: key })) { HypeAudio.stopPlayback(); renderSubcats(key); return; }
         const clip = HypeAudio.playRandomLoop({ pillar: key });
         if (!clip) { alert('No ' + meta.label.toLowerCase() + ' clips yet — upload one in a subcategory.'); return; }
         renderSubcats(key);
@@ -524,11 +524,11 @@
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
 
       const randomBtn = document.getElementById('random-play');
-      const randomActive = HypeAudio.isPlayingRandom();
+      const randomActive = HypeAudio.isPlayingRandomFilter({ pillar: key, mentality: mentality });
       randomBtn.textContent = randomActive ? '■ STOP' : meta.emoji + ' PLAY RANDOM';
       randomBtn.style.background = randomActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, ' + meta.color + ' 0%, ' + meta.color + ' 100%)';
       randomBtn.onclick = function () {
-        if (HypeAudio.isPlayingRandom()) { HypeAudio.stopPlayback(); renderSection(key, mentality); return; }
+        if (HypeAudio.isPlayingRandomFilter({ pillar: key, mentality: mentality })) { HypeAudio.stopPlayback(); renderSection(key, mentality); return; }
         const clip = HypeAudio.playRandomLoop({ pillar: key, mentality: mentality });
         if (!clip) { alert('No ' + mentalityLabel(mentality) + ' clips yet — upload one below.'); return; }
         renderSection(key, mentality);

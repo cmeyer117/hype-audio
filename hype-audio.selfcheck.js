@@ -152,4 +152,21 @@ assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is
 HypeAudio.stopPlayback();
 assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is false once playback is stopped');
 
+// isPlayingRandomFilter -- exact-match check so a pillar's own PLAY RANDOM
+// button doesn't show active just because *some* random loop (e.g. a
+// moment-mode one) happens to be running. Bug found live: a Faith pillar's
+// "PLAY RANDOM" button showed "STOP" while a moment-mode loop was playing,
+// because the old check (isPlayingRandom(), just !!randomFilter) can't tell
+// "this pillar's own loop" from "any random loop at all."
+HypeAudio.playRandomLoop({ moment: 'pre_workout' });
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), false, 'a pillar random-play button is not active while a moment-mode loop (not that pillar\'s own) is playing');
+HypeAudio.playRandomLoop({ pillar: 'faith' });
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), true, 'a pillar random-play button is active when that exact pillar-scoped loop is playing');
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith', mentality: 'worship' }), false, 'a mentality-scoped random-play button is not active when only the pillar-wide (no mentality) loop is playing');
+HypeAudio.playRandomLoop({ pillar: 'faith', mentality: 'worship' });
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith', mentality: 'worship' }), true, 'a mentality-scoped random-play button is active for its exact filter');
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), false, 'a pillar-wide random-play button is not active while a more specific mentality-scoped loop within it is playing');
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'faith' }), false, 'isPlayingRandomFilter is false once playback is stopped');
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

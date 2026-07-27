@@ -186,4 +186,52 @@ assertEqual(HypeAudio.quotePreview({ transcript_text: 'short' }, 80), 'short', '
 assertEqual(HypeAudio.quotePreview({}, 80), null, 'quotePreview returns null with no transcript_text');
 assertEqual(HypeAudio.quotePreview({ transcript_text: 'hello world' }, 0), '…', 'quotePreview with maxLen:0 truncates immediately rather than using the 80-char default');
 
+// pickFavoriteWeighted -- only returns clips from the correctly-filtered
+// pool (weighting itself isn't asserted exactly since it's random)
+HypeAudio.addClip({ id: 'fav1', title: 'A', mentality: 'goggins', pillar: 'iron', favorite: true, play_count: 0 });
+HypeAudio.addClip({ id: 'fav2', title: 'B', mentality: 'goggins', pillar: 'iron', favorite: false, play_count: 0 });
+HypeAudio.addClip({ id: 'fav3', title: 'C', mentality: 'dorian', pillar: 'iron', favorite: true, play_count: 0 });
+for (let i = 0; i < 20; i++) {
+  const picked = HypeAudio.pickFavoriteWeighted({ pillar: 'iron', mentality: 'goggins' });
+  assertEqual(['fav1', 'fav2'].indexOf(picked.id) !== -1, true, 'pickFavoriteWeighted only picks from the filtered pool');
+}
+assertEqual(HypeAudio.pickFavoriteWeighted({ pillar: 'nonexistent' }), null, 'pickFavoriteWeighted returns null for an empty pool');
+
+// playFavoritesWeightedLoop / isPlayingFavoritesWeighted / stopPlayback --
+// playSingle() (and every play* function that goes through it, including
+// the pre-existing playRandomLoop) returns the Audio object, not the clip,
+// so only truthiness is meaningful here -- production code already only
+// checks that ("if (!clip) alert(...)"), never reads .id off the return.
+const favPlayResult = HypeAudio.playFavoritesWeightedLoop({ pillar: 'iron', mentality: 'goggins' });
+assertEqual(!!favPlayResult, true, 'playFavoritesWeightedLoop returns a truthy result when the pool has a match');
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), true, 'isPlayingFavoritesWeighted true while the loop is active');
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'dorian' }), false, 'isPlayingFavoritesWeighted false for a different filter');
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), false, 'stopPlayback clears favoritesFilter');
+
+// Mutual exclusion: starting any other mode must clear favoritesFilter,
+// not just stopPlayback -- this is the real bug Codex's review caught.
+HypeAudio.playFavoritesWeightedLoop({ pillar: 'iron', mentality: 'goggins' });
+HypeAudio.playClip(HypeAudio.listActiveClips().find(c => c.id === 'fav1'));
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), false, 'playClip clears a previously-active favoritesFilter');
+
+HypeAudio.playFavoritesWeightedLoop({ pillar: 'iron', mentality: 'goggins' });
+HypeAudio.playRepeat(HypeAudio.listActiveClips().find(c => c.id === 'fav1'));
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), false, 'playRepeat clears a previously-active favoritesFilter');
+
+HypeAudio.playFavoritesWeightedLoop({ pillar: 'iron', mentality: 'goggins' });
+HypeAudio.playFromList([HypeAudio.listActiveClips().find(c => c.id === 'fav1')], 'fav1');
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), false, 'playFromList clears a previously-active favoritesFilter');
+
+HypeAudio.playFavoritesWeightedLoop({ pillar: 'iron', mentality: 'goggins' });
+HypeAudio.playRandomLoop({ pillar: 'iron', mentality: 'goggins' });
+assertEqual(HypeAudio.isPlayingFavoritesWeighted({ pillar: 'iron', mentality: 'goggins' }), false, 'playRandomLoop clears a previously-active favoritesFilter');
+HypeAudio.stopPlayback();
+
+// mediaSessionNext/Previous favorites-mode awareness
+const favNextResult = HypeAudio.mediaSessionNext(null, null, null, { pillar: 'iron', mentality: 'goggins' });
+assertEqual(favNextResult.type, 'clip', 'mediaSessionNext picks a clip when favoritesFilterState is active');
+const favPrevResult = HypeAudio.mediaSessionPrevious(null, null, null, 0, { pillar: 'iron', mentality: 'goggins' });
+assertEqual(favPrevResult.type, 'none', 'mediaSessionPrevious is a no-op during a favorites loop, same as randomFilter');
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

@@ -162,13 +162,55 @@
     return randomFilter.pillar === filter.pillar && randomFilter.mentality === filter.mentality && randomFilter.moment === filter.moment;
   }
 
+  // Favorite-weighted pick: favorited clips are ~4x as likely to be
+  // picked as non-favorited ones in the same filtered pool, but
+  // non-favorited clips can still come up -- not an exclusive filter,
+  // a weighting. Mirrors pickRandom's filter shape (pillar/mentality/moment).
+  function pickFavoriteWeighted(filter) {
+    filter = filter || {};
+    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
+    const pool = listActiveClips().filter((c) =>
+      (!filter.mentality || c.mentality === filter.mentality) &&
+      (!filter.moment || c.moment === filter.moment) &&
+      (!pillars || pillars.indexOf(c.pillar) !== -1)
+    );
+    if (pool.length === 0) return null;
+    const weighted = [];
+    pool.forEach(function (c) {
+      const weight = c.favorite ? 4 : 1;
+      for (let i = 0; i < weight; i++) weighted.push(c);
+    });
+    return weighted[Math.floor(Math.random() * weighted.length)];
+  }
+
+  // Mirrors playRandomLoop/randomFilter exactly, but as its own mode so
+  // the existing pure-random PLAY RANDOM is never touched by favoriting
+  // clips.
+  let favoritesFilter = null;
+
+  function playFavoritesWeightedLoop(filter) {
+    queue = null;
+    repeatClip = null;
+    randomFilter = null;
+    const clip = pickFavoriteWeighted(filter);
+    if (!clip) { favoritesFilter = null; return null; }
+    favoritesFilter = filter || {};
+    return playSingle(clip);
+  }
+
+  function isPlayingFavoritesWeighted(filter) {
+    if (!favoritesFilter) return false;
+    filter = filter || {};
+    return favoritesFilter.pillar === filter.pillar && favoritesFilter.mentality === filter.mentality && favoritesFilter.moment === filter.moment;
+  }
+
   function isPlayingRepeat(clipId) { return !!repeatClip && repeatClip.id === clipId; }
 
   // Pure decision functions for lock-screen (Media Session) skip buttons.
   // Take the three play-mode states as explicit args rather than reading
   // module closure vars directly, so they're unit-testable the same way
   // pickRandom() is -- see docs/superpowers/specs/2026-07-26-gym-proof-playback-design.md.
-  function mediaSessionNext(queueState, randomFilterState, repeatClipState) {
+  function mediaSessionNext(queueState, randomFilterState, repeatClipState, favoritesFilterState) {
     if (repeatClipState) return { type: 'restart' };
     if (queueState) {
       const idx = queueState.index + 1;
@@ -179,12 +221,16 @@
       const next = pickRandom(randomFilterState);
       return next ? { type: 'clip', clip: next, index: null } : { type: 'none' };
     }
+    if (favoritesFilterState) {
+      const next = pickFavoriteWeighted(favoritesFilterState);
+      return next ? { type: 'clip', clip: next, index: null } : { type: 'none' };
+    }
     return { type: 'none' };
   }
 
-  function mediaSessionPrevious(queueState, randomFilterState, repeatClipState, currentTimeSeconds) {
+  function mediaSessionPrevious(queueState, randomFilterState, repeatClipState, currentTimeSeconds, favoritesFilterState) {
     if (repeatClipState) return { type: 'restart' };
-    if (randomFilterState) return { type: 'none' };
+    if (randomFilterState || favoritesFilterState) return { type: 'none' };
     if (queueState) {
       if (currentTimeSeconds > 3) return { type: 'restart' };
       const idx = queueState.index - 1;
@@ -228,10 +274,10 @@
       if (currentAudio) currentAudio.pause();
     });
     navigator.mediaSession.setActionHandler('nexttrack', function () {
-      applyMediaSessionResult(mediaSessionNext(queue, randomFilter, repeatClip));
+      applyMediaSessionResult(mediaSessionNext(queue, randomFilter, repeatClip, favoritesFilter));
     });
     navigator.mediaSession.setActionHandler('previoustrack', function () {
-      applyMediaSessionResult(mediaSessionPrevious(queue, randomFilter, repeatClip, currentAudio ? currentAudio.currentTime : 0));
+      applyMediaSessionResult(mediaSessionPrevious(queue, randomFilter, repeatClip, currentAudio ? currentAudio.currentTime : 0, favoritesFilter));
     });
   }
 
@@ -275,6 +321,10 @@
       const next = pickRandom(randomFilter);
       if (next) { playSingle(next); return; }
       randomFilter = null;
+    } else if (favoritesFilter) {
+      const next = pickFavoriteWeighted(favoritesFilter);
+      if (next) { playSingle(next); return; }
+      favoritesFilter = null;
     }
     notifyChange();
   }
@@ -283,6 +333,7 @@
     queue = null;
     randomFilter = null;
     repeatClip = null;
+    favoritesFilter = null;
     return playSingle(clip);
   }
 
@@ -292,6 +343,7 @@
     queue = null;
     randomFilter = null;
     repeatClip = clip;
+    favoritesFilter = null;
     return playSingle(clip);
   }
 
@@ -303,6 +355,7 @@
     if (idx === -1) return null;
     randomFilter = null;
     repeatClip = null;
+    favoritesFilter = null;
     queue = { clips: clips, index: idx };
     return playSingle(clips[idx]);
   }
@@ -313,6 +366,7 @@
   function playRandomLoop(filter) {
     queue = null;
     repeatClip = null;
+    favoritesFilter = null;
     const clip = pickRandom(filter);
     if (!clip) { randomFilter = null; return null; }
     randomFilter = filter || {};
@@ -323,6 +377,7 @@
     queue = null;
     randomFilter = null;
     repeatClip = null;
+    favoritesFilter = null;
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     currentAudio = null;
     currentClipId = null;
@@ -410,6 +465,9 @@
       isPlayingMoment: isPlayingMoment,
       isPlayingRandomFilter: isPlayingRandomFilter,
       isPlayingRepeat: isPlayingRepeat,
+      pickFavoriteWeighted: pickFavoriteWeighted,
+      playFavoritesWeightedLoop: playFavoritesWeightedLoop,
+      isPlayingFavoritesWeighted: isPlayingFavoritesWeighted,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
       setArtworkResolver: setArtworkResolver,
@@ -436,10 +494,16 @@
       playPrRant: playPrRant,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
+      playClip: playClip,
+      playRepeat: playRepeat,
+      playFromList: playFromList,
       playRandomLoop: playRandomLoop,
       stopPlayback: stopPlayback,
       isPlayingMoment: isPlayingMoment,
       isPlayingRandomFilter: isPlayingRandomFilter,
+      pickFavoriteWeighted: pickFavoriteWeighted,
+      playFavoritesWeightedLoop: playFavoritesWeightedLoop,
+      isPlayingFavoritesWeighted: isPlayingFavoritesWeighted,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };

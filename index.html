@@ -1017,7 +1017,10 @@
       resultsEl.querySelectorAll('.search-result').forEach(function (row) {
         row.onclick = function () {
           const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
-          if (clip) showSection(clip.pillar, clip.mentality);
+          // A pillar-less/mentality-less legacy clip (this app has always
+          // supported that shape -- see hype-audio.selfcheck.js's own
+          // "unmigrated legacy shape" test) would crash showSection().
+          if (clip && clip.pillar && clip.mentality) showSection(clip.pillar, clip.mentality);
         };
       });
     });

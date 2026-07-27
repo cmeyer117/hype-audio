@@ -30,15 +30,14 @@
       "ScreenRecording_06-24-2025 15-35-41_1",
       "ScreenRecording_06-24-2025 13-44-08_1",
       "ScreenRecording_06-24-2025 13-47-52_1",
-      "ScreenRecording_06-24-2025 13-41-22_1"
+      "ScreenRecording_06-24-2025 13-41-22_1",
+      "RPReplay_Final1581476024",
+      "RPReplay_Final1690640240",
+      "ScreenRecording_06-24-2025 17-15-44_1",
+      "ScreenRecording_06-27-2025 17-32-57_1",
+      "ScreenRecording_06-24-2025 13-51-33_1"
     ],
-    "trim": {
-      "RPReplay_Final1581476024": { "start_anchor": null, "end_anchor": "amazing moment of my entire life" },
-      "RPReplay_Final1690640240": { "start_anchor": null, "end_anchor": "taken that one second" },
-      "ScreenRecording_06-24-2025 17-15-44_1": { "start_anchor": "most frustrating thing in the world", "end_anchor": "has to be experienced" },
-      "ScreenRecording_06-27-2025 17-32-57_1": { "start_anchor": "big balls", "end_anchor": "your biggest fears" },
-      "ScreenRecording_06-24-2025 13-51-33_1": { "start_anchor": "cookie cutter", "end_anchor": "mental garage" }
-    }
+    "trim": {}
   },
   "rants": {
     "pillar_default": "iron",
@@ -77,20 +76,19 @@
       "E845BE57-6BB9-440F-937E-B432E642D1D3",
       "EAC62CC8-9121-4F3B-ABF2-CBAD6D485F78",
       "F0D96835-536C-4839-9A62-A159E31F41DB",
-      "filtered-6DD0C8F8-029E-4A4D-BB48-24A4CDD5AE43"
+      "filtered-6DD0C8F8-029E-4A4D-BB48-24A4CDD5AE43",
+      "71E996FF-25F4-4698-B21C-C118B159A71F",
+      "992C29D6-5E2E-4FA9-A11D-34A0369AD0A1",
+      "B15B28CB-8934-49BC-B74E-946ACD69EB37",
+      "C02517C5-C7CC-4CA4-B2CF-D317AE6E3EBF",
+      "CF39B1ED-A444-4D3D-9E24-583CEE75BE9E",
+      "D0F90F9C-0519-4E5A-9AF4-852F623C14FB",
+      "F77BDF82-F7D7-4C06-B92F-3C57F1EAA3B9",
+      "filtered-308846DB-9AF8-438D-96EA-3F828D02CB0C",
+      "filtered-66881CF3-7B62-4D69-95CD-BF9BBBE267AE",
+      "filtered-A33611DD-529C-4CE7-8352-97BAFDA24515"
     ],
-    "trim": {
-      "71E996FF-25F4-4698-B21C-C118B159A71F": { "start_anchor": "it only happens once", "end_anchor": null },
-      "992C29D6-5E2E-4FA9-A11D-34A0369AD0A1": { "start_anchor": null, "end_anchor": "die for that last fucking ten" },
-      "B15B28CB-8934-49BC-B74E-946ACD69EB37": { "start_anchor": null, "end_anchor": "help you to grow" },
-      "C02517C5-C7CC-4CA4-B2CF-D317AE6E3EBF": { "start_anchor": "who the fuck cares", "end_anchor": null },
-      "CF39B1ED-A444-4D3D-9E24-583CEE75BE9E": { "start_anchor": "goes to show you", "end_anchor": null },
-      "D0F90F9C-0519-4E5A-9AF4-852F623C14FB": { "start_anchor": "I ask God for all the time", "end_anchor": null },
-      "F77BDF82-F7D7-4C06-B92F-3C57F1EAA3B9": { "start_anchor": "cross represent", "end_anchor": null },
-      "filtered-308846DB-9AF8-438D-96EA-3F828D02CB0C": { "start_anchor": null, "end_anchor": "be everything I can for you" },
-      "filtered-66881CF3-7B62-4D69-95CD-BF9BBBE267AE": { "start_anchor": "giving it years", "end_anchor": null },
-      "filtered-A33611DD-529C-4CE7-8352-97BAFDA24515": { "start_anchor": "all the fucking mind", "end_anchor": null }
-    }
+    "trim": {}
   },
   "new_rants": {
     "pillar_default": "iron",
@@ -124,13 +122,12 @@
       "filtered-10AA839E-511F-4648-861D-4F159E971986",
       "filtered-12873C4E-C957-4235-B0EF-8C269C5C0856",
       "filtered-2F506084-290D-4497-A321-53E030EE6720",
-      "filtered-5A1EA090-3743-4AFD-8105-6AD0279D73A1"
+      "filtered-5A1EA090-3743-4AFD-8105-6AD0279D73A1",
+      "7B9156B2-37CE-4AB9-8EC1-D1B61144D10C",
+      "A520C4E6-B189-49DA-8B59-B57E6A2ED007",
+      "D3FF0D84-B9F8-4F0E-8738-BD7A7EECE60B",
+      "IMG_0842"
     ],
-    "trim": {
-      "7B9156B2-37CE-4AB9-8EC1-D1B61144D10C": { "start_anchor": "how grateful I am to be alive", "end_anchor": null },
-      "A520C4E6-B189-49DA-8B59-B57E6A2ED007": { "start_anchor": "there's an energy that's deep inside you", "end_anchor": "could be fucking something man" },
-      "D3FF0D84-B9F8-4F0E-8738-BD7A7EECE60B": { "start_anchor": "I'll be fucking damned if I won't be fucking great", "end_anchor": "the beauty" },
-      "IMG_0842": { "start_anchor": null, "end_anchor": "the secrets of life" }
-    }
+    "trim": {}
   }
 }

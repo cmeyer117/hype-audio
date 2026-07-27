@@ -752,31 +752,49 @@
       var activeStream = null;
 
       var startRecording = async function () {
+        const startBtn = document.getElementById('record-start-btn');
+        // Disabled synchronously (not after the getUserMedia await) so a
+        // rapid double-tap can't fire two overlapping recordings -- the
+        // permission prompt is exactly the window a second tap could land in.
+        startBtn.disabled = true;
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch (e) {
           alert('Microphone access denied — enable it in your browser/device settings to record a clip.');
+          startBtn.disabled = false;
           return;
         }
         activeStream = stream;
         recordedChunks = [];
-        const mimeType = pickRecordMimeType();
-        mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = function (e) { if (e.data.size > 0) recordedChunks.push(e.data); };
-        mediaRecorder.onerror = function () {
-          cancelRecording();
-          alert('Recording failed — try again.');
-        };
-        mediaRecorder.onstop = function () {
+        try {
+          const mimeType = pickRecordMimeType();
+          mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+          mediaRecorder.ondataavailable = function (e) { if (e.data.size > 0) recordedChunks.push(e.data); };
+          mediaRecorder.onerror = function () {
+            cancelRecording();
+            alert('Recording failed — try again.');
+          };
+          mediaRecorder.onstop = function () {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            activeStream = null;
+            startBtn.disabled = false;
+            if (!recordedChunks.length) return; // stopped via cancelRecording, not a real stop-to-preview
+            recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || mimeType || 'audio/webm' });
+            recordedUrl = URL.createObjectURL(recordedBlob);
+            showRecordPreview();
+          };
+          mediaRecorder.start();
+        } catch (e) {
+          // Some browsers can throw constructing/starting MediaRecorder even
+          // after isTypeSupported() passed -- without this, the mic stream
+          // would keep running with nothing left able to stop it.
           stream.getTracks().forEach(function (t) { t.stop(); });
           activeStream = null;
-          if (!recordedChunks.length) return; // stopped via cancelRecording, not a real stop-to-preview
-          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || mimeType || 'audio/webm' });
-          recordedUrl = URL.createObjectURL(recordedBlob);
-          showRecordPreview();
-        };
-        mediaRecorder.start();
+          startBtn.disabled = false;
+          alert('Recording failed to start — try again.');
+          return;
+        }
         recordStartedAt = Date.now();
         document.getElementById('record-idle').style.display = 'none';
         document.getElementById('record-active').style.display = 'flex';

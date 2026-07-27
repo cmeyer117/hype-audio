@@ -163,6 +163,7 @@
   }
   .clip-actions .play-btn:hover { background: rgba(255,255,255,0.1); }
   .clip-actions .play-btn.repeat-active { background: rgba(255,255,255,0.18); border-color: var(--text-primary); }
+  .clip-actions .play-btn.favorite-active { background: rgba(255,193,7,0.18); border-color: rgba(255,193,7,0.4); }
   /* Delete lives inside this menu, not as its own visible icon — the whole
      point is it should never be a fat-finger accident: open the menu, then
      confirm() on top of that. */
@@ -262,6 +263,7 @@
     </div>
 
     <button class="random-play" id="random-play" type="button"></button>
+    <button class="random-play favorites-play" id="favorites-play" type="button"></button>
 
     <details>
       <summary>Upload a clip</summary>
@@ -578,6 +580,17 @@
         renderSection(key, mentality);
       };
 
+      const favBtn2 = document.getElementById('favorites-play');
+      const favActive = HypeAudio.isPlayingFavoritesWeighted({ pillar: key, mentality: mentality });
+      favBtn2.textContent = favActive ? '■ STOP' : '⭐ FAVORITES';
+      favBtn2.style.background = favActive ? 'rgba(255,255,255,0.1)' : 'linear-gradient(135deg, #FFC107 0%, #FFC107 100%)';
+      favBtn2.onclick = function () {
+        if (HypeAudio.isPlayingFavoritesWeighted({ pillar: key, mentality: mentality })) { HypeAudio.stopPlayback(); renderSection(key, mentality); return; }
+        const clip = HypeAudio.playFavoritesWeightedLoop({ pillar: key, mentality: mentality });
+        if (!clip) { alert('No favorited ' + mentalityLabel(mentality).toLowerCase() + ' clips yet — tap ☆ on a clip to favorite it.'); return; }
+        renderSection(key, mentality);
+      };
+
       const list = document.getElementById('clip-list');
       list.innerHTML = '';
       const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key && c.mentality === mentality; });
@@ -623,6 +636,15 @@
           renderSection(key, mentality);
         };
 
+        const favBtn = document.createElement('button');
+        favBtn.className = 'play-btn' + (clip.favorite ? ' favorite-active' : '');
+        favBtn.title = clip.favorite ? 'Remove favorite' : 'Mark favorite';
+        favBtn.textContent = clip.favorite ? '⭐' : '☆';
+        favBtn.onclick = function () {
+          HypeAudio.updateClip(clip.id, { favorite: !clip.favorite });
+          renderSection(key, mentality);
+        };
+
         const repeatBtn = document.createElement('button');
         repeatBtn.className = 'play-btn' + (HypeAudio.isPlayingRepeat(clip.id) ? ' repeat-active' : '');
         repeatBtn.title = 'Repeat this clip';
@@ -661,6 +683,7 @@
         menuWrap.appendChild(dropdown);
 
         actions.appendChild(playBtn);
+        actions.appendChild(favBtn);
         actions.appendChild(repeatBtn);
         actions.appendChild(menuWrap);
         row.appendChild(thumb);

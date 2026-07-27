@@ -722,6 +722,137 @@
     // Carl) — idempotent, safe to run on every load.
     HypeAudio.migrateGogginsToMindset();
     HypeAudio.migrateCarlToOwnPillar();
+
+    // record-your-own: hide the whole block if this browser/context can't
+    // actually record (MediaRecorder can exist as a constructor while mic
+    // capture itself is unavailable, e.g. some restricted WebViews).
+    if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      document.getElementById('record-clip-details').remove();
+    } else {
+      // Prefer a codec Safari actually supports; audio/webm is not reliable on iOS.
+      const RECORD_MIME_CANDIDATES = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+      var pickRecordMimeType = function () {
+        for (const t of RECORD_MIME_CANDIDATES) {
+          if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t)) return t;
+        }
+        return ''; // let the browser pick its own default rather than force an unsupported type
+      };
+
+      var mediaRecorder = null;
+      var recordedChunks = [];
+      var recordedBlob = null;
+      var recordedUrl = null;
+      var recordElapsedInterval = null;
+      var recordStartedAt = 0;
+      var activeStream = null;
+
+      var startRecording = async function () {
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          alert('Microphone access denied — enable it in your browser/device settings to record a clip.');
+          return;
+        }
+        activeStream = stream;
+        recordedChunks = [];
+        const mimeType = pickRecordMimeType();
+        mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = function (e) { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onerror = function () {
+          cancelRecording();
+          alert('Recording failed — try again.');
+        };
+        mediaRecorder.onstop = function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          activeStream = null;
+          if (!recordedChunks.length) return; // stopped via cancelRecording, not a real stop-to-preview
+          recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || mimeType || 'audio/webm' });
+          recordedUrl = URL.createObjectURL(recordedBlob);
+          showRecordPreview();
+        };
+        mediaRecorder.start();
+        recordStartedAt = Date.now();
+        document.getElementById('record-idle').style.display = 'none';
+        document.getElementById('record-active').style.display = 'flex';
+        recordElapsedInterval = setInterval(updateRecordElapsed, 250);
+      };
+
+      var updateRecordElapsed = function () {
+        const secs = Math.floor((Date.now() - recordStartedAt) / 1000);
+        const mins = Math.floor(secs / 60);
+        document.getElementById('record-elapsed').textContent = mins + ':' + String(secs % 60).padStart(2, '0');
+      };
+
+      var stopRecording = function () {
+        clearInterval(recordElapsedInterval);
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+      };
+
+      // Hard-stops and discards without producing a preview -- used when
+      // navigating away mid-recording or on a recorder error. Clearing
+      // recordedChunks first means onstop's own guard skips showRecordPreview().
+      var cancelRecording = function () {
+        clearInterval(recordElapsedInterval);
+        recordedChunks = [];
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        else if (activeStream) { activeStream.getTracks().forEach(function (t) { t.stop(); }); activeStream = null; }
+        document.getElementById('record-active').style.display = 'none';
+        document.getElementById('record-idle').style.display = '';
+      };
+
+      var showRecordPreview = function () {
+        document.getElementById('record-active').style.display = 'none';
+        document.getElementById('record-preview').style.display = 'flex';
+        document.getElementById('record-save-form').style.display = 'flex';
+        document.getElementById('record-preview-audio').src = recordedUrl;
+      };
+
+      var resetRecordUi = function () {
+        if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+        recordedBlob = null;
+        recordedUrl = null;
+        document.getElementById('record-preview').style.display = 'none';
+        document.getElementById('record-save-form').style.display = 'none';
+        document.getElementById('record-idle').style.display = '';
+        document.getElementById('record-save-form').reset();
+      };
+
+      document.getElementById('record-start-btn').onclick = startRecording;
+      document.getElementById('record-stop-btn').onclick = stopRecording;
+      document.getElementById('record-rerecord-btn').onclick = resetRecordUi;
+
+      document.getElementById('record-save-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const saveBtn = e.target.querySelector('button[type="submit"]');
+        saveBtn.disabled = true; // guards against a double-tap firing two uploads for one recording
+        try {
+          // recordedBlob.type can come back empty or unusual on some browsers --
+          // fall back to 'webm' rather than let split('/') produce a bad filename.
+          const parts = (recordedBlob.type || '').split('/');
+          const ext = (parts[1] || 'webm').split(';')[0] || 'webm';
+          const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
+          const url = await HypeAudio.uploadClipFile(file, supa);
+          if (!url) { alert('Upload failed.'); return; }
+          HypeAudio.addClip({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+            title: document.getElementById('record-title-input').value,
+            mentality: document.getElementById('record-mentality-input').value,
+            pillar: 'carl',
+            moment: document.getElementById('record-moment-input').value,
+            source_type: document.getElementById('record-source-input').value,
+            storage_url: url,
+            created_at: new Date().toISOString(),
+            play_count: 0,
+          });
+          resetRecordUi();
+          renderSection(currentPillar, currentMentality);
+        } finally {
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
     showHome();
   </script>
 </body>

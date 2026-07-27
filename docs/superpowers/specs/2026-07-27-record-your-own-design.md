@@ -66,7 +66,7 @@ Four states, one visible at a time (`record-idle` → `record-active` → `recor
 
 ### 2. Visibility toggle
 
-In `renderSection(key, mentality)` (index.html:518), add one line alongside the other per-render DOM updates already happening there:
+`renderSection(key, mentality)` (index.html:518) has an early `return` at index.html:542 when the pillar/mentality combo has zero clips — the toggle must land before that, not after. Add it right after the other unconditional header updates (index.html:519-524, section-title/pillar-input/mentality-input/page-bg), before the `randomBtn`/`clip-list` logic:
 
 ```js
 document.getElementById('record-clip-details').style.display = key === 'carl' ? '' : 'none';
@@ -74,13 +74,25 @@ document.getElementById('record-clip-details').style.display = key === 'carl' ? 
 
 ### 3. Recording state machine
 
+Codex's `luna` review (2026-07-27) flagged real iOS Safari gaps in the first draft — Carl's primary device, and this repo already hit a Safari-specific audio bug once before (the Range-header caching issue from the gym-proof-playback build). Folded in below: pick a codec Safari actually supports via `MediaRecorder.isTypeSupported()` instead of defaulting to `audio/webm` (unreliable on iOS), handle recorder/track errors instead of leaving the UI stuck mid-recording, and stop+release the mic if Carl navigates away mid-recording (otherwise the mic silently keeps running).
+
 ```js
+// Prefer a codec Safari actually supports; audio/webm is not reliable on iOS.
+const RECORD_MIME_CANDIDATES = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+function pickRecordMimeType() {
+  for (const t of RECORD_MIME_CANDIDATES) {
+    if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return ''; // let the browser pick its own default rather than force an unsupported type
+}
+
 let mediaRecorder = null;
 let recordedChunks = [];
 let recordedBlob = null;
 let recordedUrl = null;
 let recordElapsedInterval = null;
 let recordStartedAt = 0;
+let activeStream = null;
 
 async function startRecording() {
   let stream;
@@ -90,12 +102,20 @@ async function startRecording() {
     alert('Microphone access denied — enable it in your browser/device settings to record a clip.');
     return;
   }
+  activeStream = stream;
   recordedChunks = [];
-  mediaRecorder = new MediaRecorder(stream);
+  const mimeType = pickRecordMimeType();
+  mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
   mediaRecorder.ondataavailable = function (e) { if (e.data.size > 0) recordedChunks.push(e.data); };
+  mediaRecorder.onerror = function () {
+    cancelRecording();
+    alert('Recording failed — try again.');
+  };
   mediaRecorder.onstop = function () {
     stream.getTracks().forEach(function (t) { t.stop(); });
-    recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+    activeStream = null;
+    if (!recordedChunks.length) return; // stopped via cancelRecording, not a real stop-to-preview
+    recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || mimeType || 'audio/webm' });
     recordedUrl = URL.createObjectURL(recordedBlob);
     showPreview();
   };
@@ -115,6 +135,18 @@ function updateElapsed() {
 function stopRecording() {
   clearInterval(recordElapsedInterval);
   if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+// Hard-stops and discards without producing a preview -- used when
+// navigating away mid-recording (see nav hook below) or on a recorder error.
+// Clearing recordedChunks first means onstop's own guard skips showPreview().
+function cancelRecording() {
+  clearInterval(recordElapsedInterval);
+  recordedChunks = [];
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  else if (activeStream) { activeStream.getTracks().forEach(function (t) { t.stop(); }); activeStream = null; }
+  document.getElementById('record-active').style.display = 'none';
+  document.getElementById('record-idle').style.display = '';
 }
 
 function showPreview() {
@@ -139,48 +171,61 @@ document.getElementById('record-stop-btn').onclick = stopRecording;
 document.getElementById('record-rerecord-btn').onclick = resetRecordUi;
 ```
 
+**Navigation-away cleanup:** `showHome()`, `showSubcats(key)`, and `showSection(key, mentality)` (index.html:488, 498, 508) are the three places that switch views. Add one line at the top of each — `if (mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();` — so leaving the Carl pillar's section view mid-recording actually releases the mic instead of leaving it running silently behind a now-hidden `<details>` block.
+
 ### 4. Save — reuses the existing upload pipeline
 
 ```js
 document.getElementById('record-save-form').addEventListener('submit', async function (e) {
   e.preventDefault();
-  const ext = (recordedBlob.type.split('/')[1] || 'webm').split(';')[0];
-  const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type });
-  const url = await HypeAudio.uploadClipFile(file, supa);
-  if (!url) { alert('Upload failed.'); return; }
-  HypeAudio.addClip({
-    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-    title: document.getElementById('record-title-input').value,
-    mentality: document.getElementById('record-mentality-input').value,
-    pillar: 'carl',
-    moment: document.getElementById('record-moment-input').value,
-    source_type: document.getElementById('record-source-input').value,
-    storage_url: url,
-    created_at: new Date().toISOString(),
-    play_count: 0,
-  });
-  resetRecordUi();
-  renderSection(currentPillar, currentMentality);
+  const saveBtn = e.target.querySelector('button[type="submit"]');
+  saveBtn.disabled = true; // guards against a double-tap firing two uploads for one recording
+  try {
+    // recordedBlob.type can come back empty or unusual on some browsers --
+    // fall back to 'webm' rather than let split('/') produce a bad filename.
+    const parts = (recordedBlob.type || '').split('/');
+    const ext = (parts[1] || 'webm').split(';')[0] || 'webm';
+    const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
+    const url = await HypeAudio.uploadClipFile(file, supa);
+    if (!url) { alert('Upload failed.'); return; }
+    HypeAudio.addClip({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      title: document.getElementById('record-title-input').value,
+      mentality: document.getElementById('record-mentality-input').value,
+      pillar: 'carl',
+      moment: document.getElementById('record-moment-input').value,
+      source_type: document.getElementById('record-source-input').value,
+      storage_url: url,
+      created_at: new Date().toISOString(),
+      play_count: 0,
+    });
+    resetRecordUi();
+    renderSection(currentPillar, currentMentality);
+  } finally {
+    saveBtn.disabled = false;
+  }
 });
 ```
 
 This is the same shape `submitClip()` already builds (index.html:641-657) — a near-duplicate rather than a shared helper, because `submitClip()` reads its file from a real `<input type="file">` (`fileInput.files[0]`) while this path already has an in-memory `File` object; forcing them through one function would mean threading a fake file-input-like shim through the existing helper for no real benefit at this size. `renderSection` re-render at the end refreshes the clip list to show the new recording immediately.
 
-### 5. No-MediaRecorder fallback
+### 5. No-MediaRecorder / no-mic fallback
 
-At the top of the script, alongside other capability checks already in this file (e.g. the existing service-worker registration guard):
+At the top of the script, alongside other capability checks already in this file (e.g. the existing service-worker registration guard). Checks both `MediaRecorder` and `navigator.mediaDevices.getUserMedia` — `MediaRecorder` can exist as a constructor while mic capture itself is unavailable (older WebViews, some privacy-restricted contexts):
 
 ```js
-if (typeof MediaRecorder === 'undefined') {
+if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
   document.getElementById('record-clip-details').remove();
 }
 ```
 
-Runs once at load; if the browser has no `MediaRecorder`, the whole block is removed rather than left half-broken. The existing "Upload a clip" form is unaffected either way.
+Runs once at load; if either capability is missing, the whole block is removed rather than left half-broken. The existing "Upload a clip" form is unaffected either way. (This app is already served over HTTPS in production and via `npx serve` locally, both secure contexts `getUserMedia` requires — no new deployment concern here.)
 
 ## Testing
 
-No new pure logic worth a dedicated `*.selfcheck.js` test — everything here is DOM/MediaRecorder glue that needs a real browser and microphone, which a Node selfcheck can't provide (matches this repo's existing convention: browser-only features like the Media Session lock-screen controls from the gym-proof-playback build weren't selfcheck-tested either, only live-verified). Verify live in the dev server: record → stop → preview plays back → re-record discards and restarts → Save actually uploads and the new clip appears in the Carl pillar's list with the right pillar/mentality/moment/source.
+No new pure logic worth a dedicated `*.selfcheck.js` test — everything here is DOM/MediaRecorder glue that needs a real browser and microphone, which a Node selfcheck can't provide (matches this repo's existing convention: browser-only features like the Media Session lock-screen controls from the gym-proof-playback build weren't selfcheck-tested either, only live-verified). Verify live in the dev server: record → stop → preview plays back → re-record discards and restarts → Save actually uploads and the new clip appears in the Carl pillar's list with the right pillar/mentality/moment/source. Also verify navigating away mid-recording actually releases the mic (no lingering "recording" indicator), and a recording started, stopped, and saved actually plays back correctly afterward through the normal clip-list player, not just the local preview.
+
+Per Codex's review: browser dev-tools testing can't fully substitute for the installed Home Screen PWA on Carl's actual device — mic-permission behavior and `getUserMedia` can differ in standalone iOS PWA mode vs. a regular Safari tab. Carl should do at least one real end-to-end recording on his phone (not just in this session's browser check) before calling this fully verified.
 
 ## Out of scope (this spec)
 

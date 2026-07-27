@@ -633,6 +633,7 @@
     HypeAudio.onPlaybackChange(function () {
       if (currentMentality) renderSection(currentPillar, currentMentality);
       else if (currentPillar) renderSubcats(currentPillar);
+      else renderHome();
     });
 
     // Shared by both upload forms (clip-list screen has a fixed mentality;

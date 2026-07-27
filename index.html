@@ -554,6 +554,13 @@
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
+      // Codex review caught this: a search result's own state (input value,
+      // results shown, tiles/moment-row hidden) survived navigating back
+      // here otherwise, leaving Home stuck showing stale search results.
+      document.getElementById('global-search-input').value = '';
+      document.getElementById('global-search-results').style.display = 'none';
+      document.getElementById('tiles').style.display = '';
+      document.getElementById('moment-row').style.display = '';
       renderHome();
       renderTabbar();
     }
@@ -572,11 +579,17 @@
 
     function showTitleReview() {
       if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
+      // Codex review caught this: without resetting currentPillar/mentality
+      // and re-rendering the tab bar, opening review from inside a section
+      // left that pillar's tab still highlighted while review was showing.
+      currentPillar = null;
+      currentMentality = null;
       document.getElementById('view-home').style.display = 'none';
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = '';
       renderTitleReview();
+      renderTabbar();
     }
 
     function renderTitleReview() {

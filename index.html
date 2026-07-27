@@ -520,6 +520,7 @@
     }
 
     function showHome() {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
       currentPillar = null;
       currentMentality = null;
       document.getElementById('view-home').style.display = '';
@@ -531,6 +532,7 @@
     }
 
     function showSubcats(key) {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
       currentPillar = key;
       currentMentality = null;
       document.getElementById('view-home').style.display = 'none';
@@ -541,6 +543,7 @@
     }
 
     function showSection(key, mentality) {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
       currentPillar = key;
       currentMentality = mentality;
       document.getElementById('view-home').style.display = 'none';
@@ -557,6 +560,8 @@
       document.getElementById('pillar-input').value = key;
       document.getElementById('mentality-input').value = mentality;
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
+      const recordDetails = document.getElementById('record-clip-details');
+      if (recordDetails) recordDetails.style.display = key === 'carl' ? '' : 'none';
 
       const randomBtn = document.getElementById('random-play');
       const randomActive = HypeAudio.isPlayingRandomFilter({ pillar: key, mentality: mentality });

@@ -155,6 +155,7 @@
   .clip-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
   .clip-title { font-weight: 600; font-size: 14px; color: var(--text-primary); }
   .clip-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+  .clip-quote { font-size: 12px; font-style: italic; color: var(--text-tertiary); margin-top: 4px; line-height: 1.4; }
   .clip-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; position: relative; }
   .clip-actions .play-btn {
     padding: 8px 12px; width: 44px; border-radius: 10px; border: 1px solid var(--border-strong); background: rgba(255,255,255,0.06);
@@ -216,6 +217,9 @@
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
+    <input type="search" id="global-search-input" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
+    <div id="global-search-results" style="display:none"></div>
+    <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
     <div class="tiles" id="tiles"></div>
     <div class="moment-row" id="moment-row"></div>
   </div>
@@ -875,6 +879,47 @@
         }
       });
     }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+
+    document.getElementById('global-search-input').addEventListener('input', function (e) {
+      const query = e.target.value;
+      const resultsEl = document.getElementById('global-search-results');
+      const tilesEl = document.getElementById('tiles');
+      const momentRowEl = document.getElementById('moment-row');
+      if (!query.trim()) {
+        resultsEl.style.display = 'none';
+        tilesEl.style.display = '';
+        momentRowEl.style.display = '';
+        return;
+      }
+      const results = window.HypeAudio.searchClips(query);
+      tilesEl.style.display = 'none';
+      momentRowEl.style.display = 'none';
+      resultsEl.style.display = '';
+      resultsEl.innerHTML = results.length
+        ? results.map(function (c) {
+            const preview = window.HypeAudio.quotePreview(c, 100);
+            return '<div class="clip search-result" data-clip-id="' + c.id + '">' +
+              '<div class="clip-info">' +
+                '<div class="clip-title">' + escapeHtml(c.title) + '</div>' +
+                '<div class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</div>' +
+                (preview ? '<div class="clip-quote">' + escapeHtml(preview) + '</div>' : '') +
+              '</div>' +
+            '</div>';
+          }).join('')
+        : '<div class="empty-state">No matches</div>';
+      resultsEl.querySelectorAll('.search-result').forEach(function (row) {
+        row.onclick = function () {
+          const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
+          if (clip) showSection(clip.pillar, clip.mentality);
+        };
+      });
+    });
 
     showHome();
   </script>

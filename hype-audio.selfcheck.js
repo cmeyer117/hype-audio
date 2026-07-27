@@ -7,6 +7,16 @@ global.localStorage = {
   setItem: (k, v) => { store[k] = String(v); },
 };
 
+// Minimal Audio shim -- playRandomLoop/stopPlayback (needed to test
+// isPlayingMoment's randomFilter state) go through playSingle(), which does
+// `new Audio(clip.storage_url)`. Node has no Audio global.
+global.Audio = function (src) {
+  this.src = src;
+  this.paused = true;
+};
+global.Audio.prototype.play = function () { this.paused = false; return Promise.resolve(); };
+global.Audio.prototype.pause = function () { this.paused = true; };
+
 const HypeAudio = require('./hype-audio.js');
 
 function assertEqual(actual, expected, label) {
@@ -127,5 +137,19 @@ assertEqual(
   { type: 'none' },
   'nexttrack with no active play mode does nothing'
 );
+
+// isPlayingMoment -- distinguishes "random-looping this moment" (home-screen
+// PRE/MID-SET/POST buttons) from "a pillar's own PLAY RANDOM", both of
+// which share the same randomFilter state.
+HypeAudio.addClip({ id: '7', title: 'G', mentality: 'worship', pillar: 'faith', moment: 'pre_workout', play_count: 0 });
+HypeAudio.playRandomLoop({ moment: 'pre_workout' });
+assertEqual(HypeAudio.isPlayingMoment('pre_workout'), true, 'isPlayingMoment is true for the moment currently looping');
+assertEqual(HypeAudio.isPlayingMoment('mid_set'), false, 'isPlayingMoment is false for a different moment');
+
+HypeAudio.playRandomLoop({ pillar: 'faith' });
+assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is false when the active random loop is pillar-scoped, not moment-scoped, even if a matching clip happens to have that moment');
+
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is false once playback is stopped');
 
 console.log('hype-audio.selfcheck.js: all assertions passed');

@@ -91,6 +91,14 @@
 
   function isPlayingRandom() { return !!randomFilter; }
 
+  // Distinguishes "random-looping this moment" (home-screen PRE/MID-SET/POST
+  // buttons) from "a pillar's own PLAY RANDOM" -- both share randomFilter,
+  // but a moment-mode call never sets pillar and a pillar's own random loop
+  // never sets moment. See docs/superpowers/specs/2026-07-26-moment-modes-design.md.
+  function isPlayingMoment(moment) {
+    return !!randomFilter && randomFilter.moment === moment && !randomFilter.pillar;
+  }
+
   function isPlayingRepeat(clipId) { return !!repeatClip && repeatClip.id === clipId; }
 
   // Pure decision functions for lock-screen (Media Session) skip buttons.
@@ -323,6 +331,7 @@
       isPlaying: isPlaying,
       isCurrent: isCurrent,
       isPlayingRandom: isPlayingRandom,
+      isPlayingMoment: isPlayingMoment,
       isPlayingRepeat: isPlayingRepeat,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
@@ -344,6 +353,9 @@
       pickRandom: pickRandom,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
+      playRandomLoop: playRandomLoop,
+      stopPlayback: stopPlayback,
+      isPlayingMoment: isPlayingMoment,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };

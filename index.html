@@ -602,6 +602,13 @@
         metaEl.textContent = clip.mentality + ' · ' + clip.moment;
         info.appendChild(titleEl);
         info.appendChild(metaEl);
+        const preview = HypeAudio.quotePreview(clip, 80);
+        if (preview) {
+          const quoteEl = document.createElement('div');
+          quoteEl.className = 'clip-quote';
+          quoteEl.textContent = '"' + preview + '"';
+          info.appendChild(quoteEl);
+        }
         const actions = document.createElement('div');
         actions.className = 'clip-actions';
         const playBtn = document.createElement('button');

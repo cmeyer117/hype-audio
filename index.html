@@ -325,6 +325,14 @@
     <div id="clip-list"></div>
   </div>
 
+  <div id="view-title-review" style="display:none; padding: 0 10px">
+    <div class="back-row">
+      <button class="back-btn" id="title-review-back-btn" type="button">←</button>
+      <h1 class="view-title">Review Suggested Titles</h1>
+    </div>
+    <div id="title-review-list"></div>
+  </div>
+
 </div>
 
   <nav class="tabbar">
@@ -394,6 +402,18 @@
     HypeAudio.setArtworkResolver(mentalityArt);
 
     function renderHome() {
+      const pendingCount = HypeAudio.listActiveClips().filter(function (c) {
+        return typeof c.suggested_title === 'string' && c.suggested_title.trim() &&
+          c.suggested_title.trim() !== (c.title || '').trim();
+      }).length;
+      const reviewLink = document.getElementById('title-review-link');
+      if (pendingCount > 0) {
+        reviewLink.style.display = '';
+        reviewLink.textContent = 'Review ' + pendingCount + ' suggested title' + (pendingCount === 1 ? '' : 's') + ' →';
+      } else {
+        reviewLink.style.display = 'none';
+      }
+
       const tiles = document.getElementById('tiles');
       tiles.innerHTML = '';
       PILLAR_ORDER.forEach(function (key) {
@@ -532,6 +552,7 @@
       document.getElementById('view-home').style.display = '';
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = 'none';
+      document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
       renderHome();
       renderTabbar();
@@ -544,8 +565,56 @@
       document.getElementById('view-home').style.display = 'none';
       document.getElementById('view-subcat').style.display = '';
       document.getElementById('view-section').style.display = 'none';
+      document.getElementById('view-title-review').style.display = 'none';
       renderSubcats(key);
       renderTabbar();
+    }
+
+    function showTitleReview() {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
+      document.getElementById('view-home').style.display = 'none';
+      document.getElementById('view-subcat').style.display = 'none';
+      document.getElementById('view-section').style.display = 'none';
+      document.getElementById('view-title-review').style.display = '';
+      renderTitleReview();
+    }
+
+    function renderTitleReview() {
+      const list = document.getElementById('title-review-list');
+      const pending = HypeAudio.listActiveClips().filter(function (c) {
+        return typeof c.suggested_title === 'string' && c.suggested_title.trim() &&
+          c.suggested_title.trim() !== (c.title || '').trim();
+      });
+      list.innerHTML = pending.length ? '' : '<div class="empty-state">No pending title suggestions.</div>';
+      pending.forEach(function (clip) {
+        const row = document.createElement('div');
+        row.className = 'clip';
+        row.innerHTML =
+          '<div class="clip-info">' +
+            '<div class="clip-meta">Current: ' + escapeHtml(clip.title) + '</div>' +
+            '<div class="clip-title">Suggested: ' + escapeHtml(clip.suggested_title) + '</div>' +
+          '</div>';
+        const actions = document.createElement('div');
+        actions.className = 'clip-actions';
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'play-btn';
+        applyBtn.textContent = '✓ Apply';
+        applyBtn.onclick = function () {
+          HypeAudio.updateClip(clip.id, { title: clip.suggested_title, suggested_title: null });
+          renderTitleReview();
+        };
+        const dismissBtn = document.createElement('button');
+        dismissBtn.className = 'play-btn';
+        dismissBtn.textContent = '✕ Dismiss';
+        dismissBtn.onclick = function () {
+          HypeAudio.updateClip(clip.id, { suggested_title: null });
+          renderTitleReview();
+        };
+        actions.appendChild(applyBtn);
+        actions.appendChild(dismissBtn);
+        row.appendChild(actions);
+        list.appendChild(row);
+      });
     }
 
     function showSection(key, mentality) {
@@ -555,6 +624,7 @@
       document.getElementById('view-home').style.display = 'none';
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = '';
+      document.getElementById('view-title-review').style.display = 'none';
       renderSection(key, mentality);
       renderTabbar();
     }
@@ -695,6 +765,7 @@
 
     document.getElementById('back-btn').onclick = function () { showSubcats(currentPillar); };
     document.getElementById('subcat-back-btn').onclick = function () { showHome(); };
+    document.getElementById('title-review-back-btn').onclick = function () { showHome(); };
 
     function closeAllMenus() {
       document.querySelectorAll('.menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); });

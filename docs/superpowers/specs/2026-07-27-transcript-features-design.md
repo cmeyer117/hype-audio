@@ -7,12 +7,13 @@ Status: Approved, ready for planning
 
 Fifth and final item on the hype-audio vision batch. Companion to `docs/superpowers/specs/2026-07-27-transcript-migration-design.md` (in the main Claude workspace repo, since `instagram-cleanup`'s `.gitignore` is a deliberate scripts-only allowlist) — that spec attaches `transcript_text`/`suggested_title` onto matching clips; this spec is everything built on top of that data, all in this repo (`hype-audio-app`'s `index.html`, plus the shared `hype-audio.js` synced into `row`).
 
-Four features, brainstormed together and explicitly wanted "all in one go" rather than staged:
+Five features, brainstormed together and explicitly wanted "all in one go" rather than staged:
 
 1. Global search across all clips (title + transcript)
 2. Static quote preview per clip row
-3. Favorite flag + a new favorites-weighted shuffle mode
-4. Bulk title-review screen (apply/dismiss `suggested_title`)
+3. Favorite flag toggle
+4. A new favorites-weighted shuffle mode
+5. Bulk title-review screen (apply/dismiss `suggested_title`)
 
 All four depend on the migration having run at least once, but the code itself doesn't need to wait — clips without `transcript_text`/`suggested_title` just don't participate in these features (same graceful-absence behavior as the migration spec's "unmatched clips" case).
 
@@ -36,8 +37,8 @@ function searchClips(query) {
   const q = (query || '').trim().toLowerCase();
   if (!q) return [];
   return listActiveClips().filter(function (c) {
-    return (c.title && c.title.toLowerCase().indexOf(q) !== -1) ||
-           (c.transcript_text && c.transcript_text.toLowerCase().indexOf(q) !== -1);
+    return (typeof c.title === 'string' && c.title.toLowerCase().indexOf(q) !== -1) ||
+           (typeof c.transcript_text === 'string' && c.transcript_text.toLowerCase().indexOf(q) !== -1);
   });
 }
 
@@ -45,11 +46,18 @@ function searchClips(query) {
 // suggested_title, applied here to transcript_text for the per-row
 // preview -- consistent presentation between the two.
 function quotePreview(clip, maxLen) {
-  maxLen = maxLen || 80;
-  if (!clip.transcript_text) return null;
+  // typeof check, not `maxLen || 80` -- a caller explicitly passing 0
+  // would otherwise silently get the 80-char default instead of an
+  // empty/immediate truncation.
+  if (typeof maxLen !== 'number') maxLen = 80;
+  if (typeof clip.transcript_text !== 'string' || !clip.transcript_text) return null;
   const text = clip.transcript_text.trim();
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen).replace(/\s+\S*$/, '') + '…';
+  const truncated = text.slice(0, maxLen).replace(/\s+\S*$/, '');
+  // If the truncated text has no word boundary to cut at (one long word,
+  // or a very small maxLen), truncated can come back empty -- fall back to
+  // a hard slice rather than return a bare "…".
+  return (truncated || text.slice(0, maxLen)) + '…';
 }
 
 // Favorite-weighted pick: favorited clips are ~4x as likely to be
@@ -91,8 +99,91 @@ function playFavoritesWeightedLoop(filter) {
 function isPlayingFavoritesWeighted(filter) {
   if (!favoritesFilter) return false;
   filter = filter || {};
-  return favoritesFilter.pillar === filter.pillar && favoritesFilter.mentality === filter.mentality;
+  return favoritesFilter.pillar === filter.pillar && favoritesFilter.mentality === filter.mentality && favoritesFilter.moment === filter.moment;
 }
+```
+
+**Codex's `luna` review (2026-07-27) caught a real bug**: `queue`/`randomFilter`/`repeatClip` are kept mutually exclusive today — every mode-starting function (`playClip`, `playRepeat`, `playFromList`, `playRandomLoop`) resets the other two to `null` before setting its own. The draft above added `favoritesFilter` as a fourth mode but only reset it in `stopPlayback()` — none of those four existing functions reset it, so starting any of them while a favorites loop was active would leave `favoritesFilter` still set, and once THAT mode's own playback naturally ended, `advance()` could unexpectedly resume the stale favorites loop instead of stopping. All four need `favoritesFilter = null;` added alongside their existing resets:
+
+```js
+function playClip(clip) {
+  queue = null;
+  randomFilter = null;
+  repeatClip = null;
+  favoritesFilter = null;
+  return playSingle(clip);
+}
+
+function playRepeat(clip) {
+  queue = null;
+  randomFilter = null;
+  repeatClip = clip;
+  favoritesFilter = null;
+  return playSingle(clip);
+}
+
+function playFromList(clips, clipId) {
+  const idx = clips.findIndex(function (c) { return c.id === clipId; });
+  if (idx === -1) return null;
+  randomFilter = null;
+  repeatClip = null;
+  favoritesFilter = null;
+  queue = { clips: clips, index: idx };
+  return playSingle(clips[idx]);
+}
+
+function playRandomLoop(filter) {
+  queue = null;
+  repeatClip = null;
+  favoritesFilter = null;
+  const clip = pickRandom(filter);
+  if (!clip) { randomFilter = null; return null; }
+  randomFilter = filter || {};
+  return playSingle(clip);
+}
+```
+
+(`playFavoritesWeightedLoop` already resets `queue`/`repeatClip`/`randomFilter` in the draft above, matching the reverse direction — this fix closes the loop symmetrically.)
+
+**`mediaSessionNext`/`mediaSessionPrevious` also need favorites-mode awareness** — Codex caught that without it, the lock-screen "next" button would stop behaving like the active loop during a favorites-weighted session. These functions already take the play-mode state as explicit args (not reading closure vars directly, for testability) — add a fourth param:
+
+```js
+function mediaSessionNext(queueState, randomFilterState, repeatClipState, favoritesFilterState) {
+  if (repeatClipState) return { type: 'restart' };
+  if (queueState) {
+    const idx = queueState.index + 1;
+    if (idx < queueState.clips.length) return { type: 'clip', clip: queueState.clips[idx], index: idx };
+    return { type: 'none' };
+  }
+  if (randomFilterState) {
+    const next = pickRandom(randomFilterState);
+    return next ? { type: 'clip', clip: next, index: null } : { type: 'none' };
+  }
+  if (favoritesFilterState) {
+    const next = pickFavoriteWeighted(favoritesFilterState);
+    return next ? { type: 'clip', clip: next, index: null } : { type: 'none' };
+  }
+  return { type: 'none' };
+}
+
+function mediaSessionPrevious(queueState, randomFilterState, repeatClipState, currentTimeSeconds, favoritesFilterState) {
+  if (repeatClipState) return { type: 'restart' };
+  if (randomFilterState || favoritesFilterState) return { type: 'none' }; // no meaningful "previous" in an endless random/weighted loop, same as today's randomFilter case
+  if (queueState) {
+    if (currentTimeSeconds > 3) return { type: 'restart' };
+    const idx = queueState.index - 1;
+    if (idx >= 0) return { type: 'clip', clip: queueState.clips[idx], index: idx };
+    return { type: 'restart' };
+  }
+  return { type: 'none' };
+}
+```
+
+Call sites (index.html-adjacent, inside `setupMediaSessionHandlers` in this same file) need the extra arg:
+```js
+applyMediaSessionResult(mediaSessionNext(queue, randomFilter, repeatClip, favoritesFilter));
+// ...
+applyMediaSessionResult(mediaSessionPrevious(queue, randomFilter, repeatClip, currentAudio ? currentAudio.currentTime : 0, favoritesFilter));
 ```
 
 **`advance()` needs one more branch** (currently checks `repeatClip`, then `queue`, then `randomFilter`) to also loop `favoritesFilter`:
@@ -248,7 +339,9 @@ favBtn2.onclick = function () {
 
 ### 5. Bulk title-review screen
 
-A new view (`view-title-review`), reachable via a link from Home (only shown if at least one clip has a pending `suggested_title`):
+A new view (`view-title-review`), reachable via a link from Home (only shown if at least one clip has a pending `suggested_title`).
+
+**Codex's review caught two real gaps here.** First: `showHome()`, `showSubcats()`, and `showSection()` (record-your-own's mic-release check already lives in all three) only currently toggle the existing three views — they need to hide `view-title-review` too, or it can stay visible underneath/alongside another view after navigating away. Second: navigating TO the title-review screen is itself a "navigate away from the Carl pillar's section" case just like the other three nav functions — if a recording were in progress, it needs the same mic-release check `showHome`/`showSubcats`/`showSection` already have (see the record-your-own feature, already shipped in this repo).
 
 ```html
 <div id="view-title-review" style="display:none; padding: 0 10px">
@@ -262,17 +355,26 @@ A new view (`view-title-review`), reachable via a link from Home (only shown if 
 
 ```js
 function showTitleReview() {
+  if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
   document.getElementById('view-home').style.display = 'none';
   document.getElementById('view-subcat').style.display = 'none';
   document.getElementById('view-section').style.display = 'none';
   document.getElementById('view-title-review').style.display = '';
   renderTitleReview();
 }
+```
 
+`showHome()`, `showSubcats()`, and `showSection()` each need one line added — `document.getElementById('view-title-review').style.display = 'none';` — alongside their existing view-toggle lines.
+
+```js
 function renderTitleReview() {
   const list = document.getElementById('title-review-list');
+  // .trim() on both sides -- migration output or a manually-edited title
+  // with only whitespace differences would otherwise stay "pending"
+  // forever until explicitly dismissed.
   const pending = HypeAudio.listActiveClips().filter(function (c) {
-    return c.suggested_title && c.suggested_title !== c.title;
+    return typeof c.suggested_title === 'string' && c.suggested_title.trim() &&
+      c.suggested_title.trim() !== (c.title || '').trim();
   });
   list.innerHTML = pending.length
     ? ''
@@ -313,7 +415,10 @@ document.getElementById('title-review-back-btn').onclick = function () { showHom
 
 Home screen link, shown conditionally:
 ```js
-const pendingCount = HypeAudio.listActiveClips().filter(function (c) { return c.suggested_title && c.suggested_title !== c.title; }).length;
+const pendingCount = HypeAudio.listActiveClips().filter(function (c) {
+  return typeof c.suggested_title === 'string' && c.suggested_title.trim() &&
+    c.suggested_title.trim() !== (c.title || '').trim();
+}).length;
 const reviewLink = document.getElementById('title-review-link');
 if (pendingCount > 0) {
   reviewLink.style.display = '';
@@ -333,3 +438,4 @@ if (pendingCount > 0) {
 - The migration itself (companion spec).
 - Editing `transcript_text` in the app (read-only, sourced from the migration).
 - Search result ranking/relevance scoring beyond substring match.
+- **Multi-device write-conflict handling on title apply** (Codex flagged: applying a suggested title via `updateClip` could race with an edit from another device). Not new to this feature — every existing `updateClip` call in this app (favoriting, deleting, editing cues, etc.) already has the same last-write-wins characteristic via the existing `sync.js` merge, with no per-field conflict resolution. Fixing that is a pre-existing cross-cutting concern, not something to solve inside this one feature.

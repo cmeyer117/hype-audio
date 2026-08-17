@@ -241,6 +241,7 @@
     <input type="search" id="global-search-input" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
+    <button id="content-ideas-link" onclick="showContentIdeas()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
     <div class="tiles" id="tiles"></div>
     <div class="moment-row" id="moment-row"></div>
     <div class="moment-row" id="state-mode-row"></div>
@@ -354,6 +355,14 @@
     <div id="title-review-list"></div>
   </div>
 
+  <div id="view-content-ideas" style="display:none; padding: 0 10px">
+    <div class="back-row">
+      <button class="back-btn" id="content-ideas-back-btn" type="button">←</button>
+      <h1 class="view-title">Content Ideas</h1>
+    </div>
+    <div id="content-ideas-list"></div>
+  </div>
+
 </div>
 
   <nav class="tabbar">
@@ -440,6 +449,15 @@
         reviewLink.textContent = 'Review ' + pendingCount + ' suggested title' + (pendingCount === 1 ? '' : 's') + ' →';
       } else {
         reviewLink.style.display = 'none';
+      }
+
+      const contentIdeasCount = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingContentIdea).length;
+      const contentIdeasLink = document.getElementById('content-ideas-link');
+      if (contentIdeasCount > 0) {
+        contentIdeasLink.style.display = '';
+        contentIdeasLink.textContent = contentIdeasCount + ' rant' + (contentIdeasCount === 1 ? '' : 's') + ' ready for content →';
+      } else {
+        contentIdeasLink.style.display = 'none';
       }
 
       const tiles = document.getElementById('tiles');
@@ -604,6 +622,7 @@
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
+      document.getElementById('view-content-ideas').style.display = 'none';
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
       // Codex review caught this: a search result's own state (input value,
       // results shown, tiles/moment-row hidden) survived navigating back
@@ -624,6 +643,7 @@
       document.getElementById('view-subcat').style.display = '';
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
+      document.getElementById('view-content-ideas').style.display = 'none';
       renderSubcats(key);
       renderTabbar();
     }
@@ -639,6 +659,7 @@
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = '';
+      document.getElementById('view-content-ideas').style.display = 'none';
       renderTitleReview();
       renderTabbar();
     }
@@ -681,6 +702,105 @@
       });
     }
 
+    function showContentIdeas() {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
+      currentPillar = null;
+      currentMentality = null;
+      document.getElementById('view-home').style.display = 'none';
+      document.getElementById('view-subcat').style.display = 'none';
+      document.getElementById('view-section').style.display = 'none';
+      document.getElementById('view-title-review').style.display = 'none';
+      document.getElementById('view-content-ideas').style.display = '';
+      renderContentIdeas();
+      renderTabbar();
+    }
+
+    const CONTENT_IDEA_PILLARS = ['mindset', 'training', 'life', 'faith', 'diet'];
+
+    function renderContentIdeas() {
+      const list = document.getElementById('content-ideas-list');
+      const pending = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingContentIdea);
+      list.innerHTML = pending.length ? '' : '<div class="empty-state">No rants ready for content yet.</div>';
+      pending.forEach(function (clip) {
+        const row = document.createElement('div');
+        row.className = 'clip';
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'stretch';
+
+        const preview = document.createElement('div');
+        preview.className = 'clip-quote';
+        preview.textContent = '"' + (HypeAudio.quotePreview(clip, 200) || '') + '"';
+        row.appendChild(preview);
+
+        const titleField = document.createElement('div');
+        titleField.className = 'field';
+        titleField.innerHTML = '<label>Title</label>';
+        const titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.value = clip.title || '';
+        titleField.appendChild(titleInput);
+        row.appendChild(titleField);
+
+        const hookField = document.createElement('div');
+        hookField.className = 'field';
+        hookField.innerHTML = '<label>Hook</label>';
+        const hookInput = document.createElement('input');
+        hookInput.type = 'text';
+        hookInput.placeholder = 'The line that stops the scroll';
+        hookField.appendChild(hookInput);
+        row.appendChild(hookField);
+
+        const pillarField = document.createElement('div');
+        pillarField.className = 'field';
+        pillarField.innerHTML = '<label>Pillar</label>';
+        const pillarSelect = document.createElement('select');
+        CONTENT_IDEA_PILLARS.forEach(function (p) {
+          const opt = document.createElement('option');
+          opt.value = p;
+          opt.textContent = p.charAt(0).toUpperCase() + p.slice(1);
+          if (p === 'mindset') opt.selected = true;
+          pillarSelect.appendChild(opt);
+        });
+        pillarField.appendChild(pillarSelect);
+        row.appendChild(pillarField);
+
+        const sendBtn = document.createElement('button');
+        sendBtn.type = 'button';
+        sendBtn.textContent = 'Send to Content Ideas';
+        sendBtn.style.marginTop = '10px';
+        sendBtn.style.padding = '10px';
+        sendBtn.style.border = '0';
+        sendBtn.style.borderRadius = '10px';
+        sendBtn.style.background = 'linear-gradient(135deg, #F0524E 0%, var(--iron) 100%)';
+        sendBtn.style.color = '#0a0a0a';
+        sendBtn.style.fontFamily = 'inherit';
+        sendBtn.style.fontWeight = '700';
+        sendBtn.style.cursor = 'pointer';
+        sendBtn.onclick = async function () {
+          sendBtn.disabled = true;
+          const prevLabel = sendBtn.textContent;
+          sendBtn.textContent = 'Sending…';
+          try {
+            const result = await HypeAudio.sendToContentIdea(clip, {
+              title: titleInput.value.trim() || clip.title,
+              hook: hookInput.value.trim(),
+              pillar: pillarSelect.value,
+              body: clip.transcript_text,
+            });
+            if (!result.id) { alert(result.error || 'Failed to send.'); return; }
+            HypeAudio.updateClip(clip.id, { content_idea_sent: true });
+            renderContentIdeas();
+          } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = prevLabel;
+          }
+        };
+        row.appendChild(sendBtn);
+
+        list.appendChild(row);
+      });
+    }
+
     function showSection(key, mentality) {
       if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
       currentPillar = key;
@@ -689,6 +809,7 @@
       document.getElementById('view-subcat').style.display = 'none';
       document.getElementById('view-section').style.display = '';
       document.getElementById('view-title-review').style.display = 'none';
+      document.getElementById('view-content-ideas').style.display = 'none';
       renderSection(key, mentality);
       renderTabbar();
     }
@@ -839,6 +960,7 @@
     document.getElementById('back-btn').onclick = function () { showSubcats(currentPillar); };
     document.getElementById('subcat-back-btn').onclick = function () { showHome(); };
     document.getElementById('title-review-back-btn').onclick = function () { showHome(); };
+    document.getElementById('content-ideas-back-btn').onclick = function () { showHome(); };
 
     function closeAllMenus() {
       document.querySelectorAll('.menu-dropdown.open').forEach(function (d) { d.classList.remove('open'); });

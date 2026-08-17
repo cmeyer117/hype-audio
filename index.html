@@ -184,6 +184,8 @@
     color: var(--danger); font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
   }
   .menu-item:hover { background: rgba(255,138,138,0.1); }
+  .menu-item.menu-item-neutral { color: var(--text-primary); }
+  .menu-item.menu-item-neutral:hover { background: rgba(255,255,255,0.06); }
   .empty-state { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 28px 0; }
 
   /* ===== Bottom tab bar (Row's gym-tabbar pattern) ===== */
@@ -771,6 +773,14 @@
         menuBtn.textContent = '⋮';
         const dropdown = document.createElement('div');
         dropdown.className = 'menu-dropdown';
+        const cooldownItem = document.createElement('button');
+        cooldownItem.className = 'menu-item menu-item-neutral';
+        cooldownItem.textContent = HypeAudio.isOnCooldown(clip) ? 'Cancel cooldown' : 'Not now (1 day)';
+        cooldownItem.onclick = function () {
+          dropdown.classList.remove('open');
+          HypeAudio.toggleDislikeCooldown(clip.id);
+          renderSection(key, mentality);
+        };
         const delItem = document.createElement('button');
         delItem.className = 'menu-item';
         delItem.textContent = 'Delete';
@@ -780,6 +790,7 @@
           HypeAudio.deleteClip(clip.id);
           renderSection(key, mentality);
         };
+        dropdown.appendChild(cooldownItem);
         dropdown.appendChild(delItem);
         menuBtn.onclick = function (e) {
           e.stopPropagation();

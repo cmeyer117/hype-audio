@@ -189,12 +189,30 @@
   /* ===== Bottom tab bar (Row's gym-tabbar pattern) ===== */
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
-    display: flex; justify-content: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
     background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,0.85) 40%, rgba(10,10,11,0.97) 100%);
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     pointer-events: none;
   }
+  .nowplaying {
+    pointer-events: auto;
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; max-width: 460px; padding: 9px 12px;
+    background: rgba(20,20,22,0.85);
+    border: 1px solid var(--border-strong); border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.55);
+  }
+  .nowplaying-title {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+  }
+  .nowplaying-btn {
+    flex-shrink: 0; padding: 7px 12px; border-radius: 10px;
+    border: 1px solid var(--border-strong); background: rgba(255,255,255,0.06);
+    color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .nowplaying-btn:hover { background: rgba(255,255,255,0.1); }
   .tabbar-inner {
     pointer-events: auto;
     display: flex; width: 100%; max-width: 460px; gap: 4px;
@@ -336,6 +354,11 @@
 </div>
 
   <nav class="tabbar">
+    <div class="nowplaying" id="nowplaying" style="display:none">
+      <span class="nowplaying-title" id="nowplaying-title"></span>
+      <button class="nowplaying-btn" id="nowplaying-toggle" type="button">⏸</button>
+      <button class="nowplaying-btn" id="nowplaying-stop" type="button">■</button>
+    </div>
     <div class="tabbar-inner" id="tabbar-inner"></div>
   </nav>
 
@@ -350,10 +373,11 @@
     }
   </script>
   <script>
-    const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
-    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
+    // No Supabase client here -- sync.js owns the only one this page needs,
+    // and it already guards `!window.supabase`. Creating a second client at
+    // top level was dead code AND the reason the app hard-crashed offline:
+    // the CDN script fails to load, window.supabase is undefined, the whole
+    // inline script dies at the constructor call before showHome() ever ran.
     const PILLARS = {
       mindset: { label: 'Mindset', emoji: '🧠', color: 'var(--mindset)' },
       iron:    { label: 'Iron',    emoji: '🔥', color: 'var(--iron)' },
@@ -501,7 +525,7 @@
       clips.forEach(function (c) { counts[c.mentality] = (counts[c.mentality] || 0) + 1; });
       const mentalities = Object.keys(counts).sort();
       if (!mentalities.length) {
-        tiles.innerHTML = '<div class="empty-state">No ' + meta.label.toLowerCase() + ' clips yet — upload one via a mentality tile once you add one.</div>';
+        tiles.innerHTML = '<div class="empty-state">No ' + meta.label.toLowerCase() + ' clips yet — upload one above.</div>';
         return;
       }
       mentalities.forEach(function (m) {
@@ -513,7 +537,7 @@
           '<div class="tile-panels"><div class="tile-panel" style="grid-column:1/-1;grid-row:1/-1;background-image:url(\'' + mentalityArt(m) + '\')"></div></div>' +
           '<div class="tile-content">' +
             '<div>' +
-              '<div class="tile-name" style="color:' + meta.color + '">' + mentalityLabel(m) + '</div>' +
+              '<div class="tile-name" style="color:' + meta.color + '">' + escapeHtml(mentalityLabel(m)) + '</div>' +
               '<div class="tile-footer">' +
                 '<span class="tile-count">' + counts[m] + ' clip' + (counts[m] === 1 ? '' : 's') + '</span>' +
                 '<span class="tile-arrow">→</span>' +
@@ -786,9 +810,27 @@
     }
     document.addEventListener('click', closeAllMenus);
 
+    // Persistent now-playing bar above the tab bar -- playback state used to
+    // be invisible (and unstoppable) from any screen other than the exact
+    // one whose button started it.
+    function renderNowPlaying() {
+      const bar = document.getElementById('nowplaying');
+      const clip = HypeAudio.getCurrentClip();
+      if (!clip) { bar.style.display = 'none'; return; }
+      bar.style.display = 'flex';
+      document.getElementById('nowplaying-title').textContent = clip.title || 'Untitled';
+      document.getElementById('nowplaying-toggle').textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+    }
+    document.getElementById('nowplaying-toggle').onclick = function () {
+      const clip = HypeAudio.getCurrentClip();
+      if (clip) HypeAudio.togglePlay(clip);
+    };
+    document.getElementById('nowplaying-stop').onclick = function () { HypeAudio.stopPlayback(); };
+
     // Keep whichever row is actually playing in sync (icon flips to ▶ again
     // once a clip ends, without polling).
     HypeAudio.onPlaybackChange(function () {
+      renderNowPlaying();
       if (currentMentality) renderSection(currentPillar, currentMentality);
       else if (currentPillar) renderSubcats(currentPillar);
       else renderHome();
@@ -798,20 +840,35 @@
     // subcat screen lets you type a brand-new one that has no tile yet).
     async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput) {
       const file = fileInput.files[0];
-      const { url, error } = await HypeAudio.uploadClipFile(file);
-      if (!url) { alert(error || 'Upload failed.'); return; }
-      HypeAudio.addClip({
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-        title: titleInput.value,
-        mentality: mentality,
-        pillar: pillar,
-        moment: moment,
-        source_type: source,
-        storage_url: url,
-        created_at: new Date().toISOString(),
-        play_count: 0,
-      });
-      form.reset();
+      // Normalized to lowercase -- mentality is the grouping key for subcat
+      // tiles and random filters, so "Goggins" and "goggins" would otherwise
+      // become two separate subcategories.
+      mentality = (mentality || '').trim().toLowerCase();
+      const title = (titleInput.value || '').trim();
+      if (!mentality || !title) { alert('Title and mentality are both required.'); return; }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      submitBtn.disabled = true; // also the double-submit guard
+      const prevLabel = submitBtn.textContent;
+      submitBtn.textContent = 'Uploading…';
+      try {
+        const { url, error } = await HypeAudio.uploadClipFile(file);
+        if (!url) { alert(error || 'Upload failed.'); return; }
+        HypeAudio.addClip({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+          title: title,
+          mentality: mentality,
+          pillar: pillar,
+          moment: moment,
+          source_type: source,
+          storage_url: url,
+          created_at: new Date().toISOString(),
+          play_count: 0,
+        });
+        form.reset();
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = prevLabel;
+      }
     }
 
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
@@ -977,8 +1034,8 @@
           if (!url) { alert(error || 'Upload failed.'); return; }
           HypeAudio.addClip({
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-            title: document.getElementById('record-title-input').value,
-            mentality: document.getElementById('record-mentality-input').value,
+            title: document.getElementById('record-title-input').value.trim(),
+            mentality: document.getElementById('record-mentality-input').value.trim().toLowerCase(),
             pillar: 'carl',
             moment: document.getElementById('record-moment-input').value,
             source_type: document.getElementById('record-source-input').value,

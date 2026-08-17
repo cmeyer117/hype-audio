@@ -234,4 +234,37 @@ assertEqual(favNextResult.type, 'clip', 'mediaSessionNext picks a clip when favo
 const favPrevResult = HypeAudio.mediaSessionPrevious(null, null, null, 0, { pillar: 'iron', mentality: 'goggins' });
 assertEqual(favPrevResult.type, 'none', 'mediaSessionPrevious is a no-op during a favorites loop, same as randomFilter');
 
+// getCurrentClip -- what the now-playing bar renders from
+const npClip = HypeAudio.listActiveClips().find(c => c.id === 'fav1');
+HypeAudio.playClip(npClip);
+assertEqual(HypeAudio.getCurrentClip().id, 'fav1', 'getCurrentClip returns the loaded clip while playing');
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.getCurrentClip(), null, 'getCurrentClip is null after stopPlayback');
+
+// play_count -- counts once per playback (a resume re-fires onplay but is
+// the same listen), and accumulates across repeat-mode restarts (the old
+// code re-read a stale clip snapshot, so repeats never accumulated).
+const countClipBefore = HypeAudio.listClips().find(c => c.id === 'fav1').play_count || 0;
+const countAudio = HypeAudio.playClip(npClip);
+countAudio.onplay();
+countAudio.onplay(); // simulated resume after pause
+assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').play_count, countClipBefore + 1, 'play_count increments once per Audio element, resume does not re-count');
+const repeatAudio = HypeAudio.playRepeat(npClip);
+repeatAudio.onplay();
+assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').play_count, countClipBefore + 2, 'play_count accumulates across plays via a fresh read, not the stale clip snapshot');
+HypeAudio.stopPlayback();
+
+// onerror skip-ahead -- a broken storage_url used to silently kill the
+// queue/loop (onended never fires, nothing advances).
+const errClips = [
+  HypeAudio.listClips().find(c => c.id === 'fav1'),
+  HypeAudio.listClips().find(c => c.id === 'fav2'),
+];
+const errAudio = HypeAudio.playFromList(errClips, 'fav1');
+errAudio.onerror();
+assertEqual(HypeAudio.getCurrentClip().id, 'fav2', 'a playback error advances to the next clip instead of killing the queue');
+errAudio.onerror(); // stale handler on the replaced Audio must be inert
+assertEqual(HypeAudio.getCurrentClip().id, 'fav2', 'a stale Audio\'s late onerror does not advance again');
+HypeAudio.stopPlayback();
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

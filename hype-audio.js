@@ -1,7 +1,8 @@
 // Hype Audio — shared core logic (metadata list + Storage upload).
-// Copied verbatim into both the Row repo and the standalone hype-audio
-// repo, same duplication pattern sync.js/topbar.js already use across
-// Row/Vessel's separate static-site repos. No build step, no bundler.
+// This repo is the canonical copy. Row carries an older, deliberately
+// trailing subset (no upload support; its sync.js also diverged for Row's
+// auth) — the original "byte-identical in both repos" convention is dead
+// as of 2026-08-16. No build step, no bundler.
 (function () {
   'use strict';
   const LS_KEY = 'hype_audio';
@@ -118,6 +119,11 @@
   // second playClip() call stops whatever's already playing instead of layering.
   let currentAudio = null;
   let currentClipId = null;
+  let currentClip = null;
+  // Consecutive playback errors while looping -- reset on any successful
+  // play, so one dead storage_url skips ahead but an all-broken pool (or a
+  // dead network that navigator.onLine missed) can't spin forever.
+  let errorStreak = 0;
   let onChangeCb = null;
   // Auto-advance state: at most one of these is active at a time. `queue` is
   // a fixed snapshot (list + position) for "play down the list from here";
@@ -136,6 +142,10 @@
   function isPlaying(clipId) {
     return currentClipId === clipId && !!currentAudio && !currentAudio.paused;
   }
+
+  // The clip currently loaded (playing OR paused), null once it ends or
+  // playback is stopped -- what the now-playing bar renders from.
+  function getCurrentClip() { return currentClipId ? currentClip : null; }
 
   // Unlike isPlaying(), true whether the clip is playing OR paused -- used to
   // tell "resume/pause this row" apart from "start a fresh queue from here".
@@ -289,22 +299,46 @@
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
     currentClipId = clip.id;
+    currentClip = clip;
     updateMediaSessionMetadata(clip);
     // play_count increments on the real onplay event, not right after calling
     // .play() -- that promise can reject (autoplay policy, offline, a bad
     // storage_url) with no audio ever actually starting, which used to still
     // count as a play every time (caught in Codex review, worse now that
     // auto-play fires this on every logged set instead of only a manual tap).
+    // Once per Audio element: a resume after pause re-fires onplay but is
+    // the same listen, not a new one.
+    let counted = false;
     audio.onplay = function () {
-      updateClip(clip.id, { play_count: (clip.play_count || 0) + 1 });
+      errorStreak = 0;
+      if (!counted) {
+        counted = true;
+        // Fresh read, not clip.play_count -- `clip` can be a stale snapshot
+        // (repeat mode reuses one object forever, so counts never accumulated).
+        const fresh = listClips().find(function (c) { return c.id === clip.id; });
+        updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 });
+      }
       notifyChange();
     };
     audio.onpause = notifyChange;
-    audio.onended = function () { currentClipId = null; advance(); };
+    audio.onended = function () {
+      if (audio !== currentAudio) return; // stale handler after a newer play started
+      currentClipId = null;
+      advance();
+    };
     audio.onerror = function () {
+      if (audio !== currentAudio) return;
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         alert('This clip isn\'t downloaded yet -- needs a connection to play for the first time.');
+        return;
       }
+      // A broken storage_url used to kill the loop silently (onended never
+      // fires, nothing advances). Skip ahead instead, with the streak guard
+      // above stopping a pool where everything is broken.
+      errorStreak += 1;
+      currentClipId = null;
+      if (errorStreak >= 5) { stopPlayback(); return; }
+      advance();
     };
     audio.play().catch(function () {});
     notifyChange();
@@ -381,6 +415,8 @@
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     currentAudio = null;
     currentClipId = null;
+    currentClip = null;
+    errorStreak = 0;
     notifyChange();
   }
 
@@ -450,39 +486,26 @@
     try { localStorage.removeItem(UPLOAD_SECRET_KEY); } catch (e) {}
   }
 
-  function fileToBase64(file) {
-    return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () {
-        // result is "data:<mime>;base64,<data>" -- strip the prefix.
-        var result = reader.result;
-        var comma = result.indexOf(',');
-        resolve(comma === -1 ? result : result.slice(comma + 1));
-      };
-      reader.onerror = function () { reject(reader.error); };
-      reader.readAsDataURL(file);
-    });
-  }
+  // Sanity ceiling only -- the file no longer passes through the Vercel
+  // function (whose 4.5MB body limit is what silently broke every upload
+  // over ~3.3MB under the old base64 flow), so this just catches "picked a
+  // video by accident", not a transport constraint.
+  var MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
-  // Returns { url, error } -- error is a real, user-facing message on
-  // failure (was previously discarded, only "Upload failed" ever shown).
+  // Returns { url, error }. Two steps: /api/upload-clip validates the
+  // passphrase and returns a one-time signed Storage upload URL, then the
+  // raw file PUTs directly to Storage -- no base64, no Vercel body limit.
   async function uploadClipFile(file) {
     var secret = getUploadSecret();
     if (!secret) return { url: null, error: 'Upload cancelled — no passphrase entered.' };
-
-    var fileBase64;
-    try {
-      fileBase64 = await fileToBase64(file);
-    } catch (e) {
-      return { url: null, error: 'Could not read the file.' };
-    }
+    if (file.size > MAX_UPLOAD_BYTES) return { url: null, error: 'File too big — max 25MB for an audio clip.' };
 
     var res;
     try {
       res = await fetch('/api/upload-clip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
-        body: JSON.stringify({ filename: file.name, contentType: file.type || 'audio/webm', fileBase64: fileBase64 }),
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'audio/webm' }),
       });
     } catch (e) {
       return { url: null, error: 'Network error during upload.' };
@@ -495,7 +518,19 @@
       if (res.status === 401) clearUploadSecret();
       return { url: null, error: body.error || ('Upload failed (' + res.status + ').') };
     }
-    return { url: body.url, error: null };
+
+    var putRes;
+    try {
+      putRes = await fetch(body.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'audio/webm' },
+        body: file,
+      });
+    } catch (e) {
+      return { url: null, error: 'Network error during upload.' };
+    }
+    if (!putRes.ok) return { url: null, error: 'Storage upload failed (' + putRes.status + ').' };
+    return { url: body.publicUrl, error: null };
   }
 
   if (typeof window !== 'undefined') {
@@ -520,6 +555,7 @@
       togglePlay: togglePlay,
       isPlaying: isPlaying,
       isCurrent: isCurrent,
+      getCurrentClip: getCurrentClip,
       isPlayingRandom: isPlayingRandom,
       isPlayingMoment: isPlayingMoment,
       isPlayingRandomFilter: isPlayingRandomFilter,
@@ -553,6 +589,7 @@
       playPrRant: playPrRant,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
+      getCurrentClip: getCurrentClip,
       playClip: playClip,
       playRepeat: playRepeat,
       playFromList: playFromList,

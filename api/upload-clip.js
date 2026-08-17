@@ -1,22 +1,21 @@
-// Vercel serverless function -- the only path allowed to write into the
-// `hype-audio` Storage bucket. Anonymous client-side uploads were blocked by
-// RLS the whole time (found 2026-08-17 via a live Codex audit probe: a real
-// upload attempt returned a 403 "new row violates row-level security
-// policy" -- both the regular upload form and record-your-own's Save have
-// never actually persisted a clip). Opening anonymous Storage inserts would
-// make the bucket writable by anyone who finds the endpoint, so this stays
-// server-side with the service-role key, gated by a shared secret -- this
-// app has exactly one user and no existing login system, so a passphrase
-// header (same class as Jarvis's pre-2026-08-05 gate) is proportionate; a
-// full Supabase Auth login flow would be over-engineering for a single-user
-// public clip library.
+// Vercel serverless function -- the only path allowed to authorize writes
+// into the `hype-audio` Storage bucket. Anonymous client-side uploads are
+// blocked by RLS (found 2026-08-17 via a live Codex audit probe), and
+// opening anonymous Storage inserts would make the bucket writable by
+// anyone who finds the endpoint -- so authorization stays server-side with
+// the service-role key, gated by a shared secret. This app has exactly one
+// user and no login system, so a passphrase header is proportionate; a full
+// Supabase Auth flow would be over-engineering for a single-user library.
+//
+// 2026-08-16: this endpoint no longer relays the file itself. The old
+// base64-through-the-function flow silently broke every upload over ~3.3MB
+// (Vercel's 4.5MB request-body cap, plus base64's +33%) while advertising
+// an 8MB limit. Now it just validates the passphrase and returns a one-time
+// signed upload URL; the client PUTs the raw file straight to Storage.
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co'
 const BUCKET = 'hype-audio'
-// Rejected well before Vercel's own body-size limit so the client gets a
-// clear reason instead of a generic 413.
-const MAX_FILE_BYTES = 8 * 1024 * 1024
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -34,7 +33,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const { filename, contentType, fileBase64 } = req.body || {}
+  const { filename, contentType } = req.body || {}
   if (typeof filename !== 'string' || !filename || filename.length > 200) {
     res.status(400).json({ error: 'Missing or invalid filename' })
     return
@@ -43,42 +42,26 @@ export default async function handler(req, res) {
     res.status(400).json({ error: 'Missing or invalid contentType' })
     return
   }
-  if (typeof fileBase64 !== 'string' || !fileBase64) {
-    res.status(400).json({ error: 'Missing file data' })
-    return
-  }
-
-  let buffer
-  try {
-    buffer = Buffer.from(fileBase64, 'base64')
-  } catch {
-    res.status(400).json({ error: 'Invalid file encoding' })
-    return
-  }
-  if (buffer.length === 0 || buffer.length > MAX_FILE_BYTES) {
-    res.status(400).json({ error: `File must be under ${MAX_FILE_BYTES / 1024 / 1024}MB` })
-    return
-  }
 
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_')
   const objectName = `clip_${Date.now()}_${Math.random().toString(36).slice(2, 10)}_${safeName}`
 
   const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  const { error } = await supabase.storage
+  const { data, error } = await supabase.storage
     .from(BUCKET)
-    .upload(objectName, buffer, { contentType, upsert: false })
+    .createSignedUploadUrl(objectName)
 
-  if (error) {
-    console.error('[upload-clip] Storage upload failed:', error.message)
-    res.status(502).json({ error: 'Storage upload failed' })
+  if (error || !data?.signedUrl) {
+    console.error('[upload-clip] createSignedUploadUrl failed:', error?.message)
+    res.status(502).json({ error: 'Could not authorize upload' })
     return
   }
 
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(objectName)
-  if (!data?.publicUrl) {
-    res.status(502).json({ error: 'Upload succeeded but could not resolve public URL' })
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(objectName)
+  if (!pub?.publicUrl) {
+    res.status(502).json({ error: 'Could not resolve public URL' })
     return
   }
 
-  res.status(200).json({ url: data.publicUrl })
+  res.status(200).json({ uploadUrl: data.signedUrl, publicUrl: pub.publicUrl })
 }

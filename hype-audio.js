@@ -688,6 +688,41 @@
     return { url: body.publicUrl, error: null };
   }
 
+  // Returns { id, error }. Reuses the same stored passphrase uploadClipFile
+  // already prompts for -- one secret, one trust boundary, no reason to
+  // prompt twice in the same session.
+  async function sendToContentIdea(clip, fields) {
+    var secret = getUploadSecret();
+    if (!secret) return { id: null, error: 'Cancelled — no passphrase entered.' };
+
+    var res;
+    try {
+      res = await fetch('/api/create-content-idea', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
+        body: JSON.stringify({
+          title: fields.title,
+          hook: fields.hook,
+          pillar: fields.pillar,
+          body: fields.body,
+          sourceClipId: clip.id,
+          sourceStorageUrl: clip.storage_url,
+        }),
+      });
+    } catch (e) {
+      return { id: null, error: 'Network error.' };
+    }
+
+    var responseBody = {};
+    try { responseBody = await res.json(); } catch (e) {}
+
+    if (!res.ok) {
+      if (res.status === 401) clearUploadSecret();
+      return { id: null, error: responseBody.error || ('Failed (' + res.status + ').') };
+    }
+    return { id: responseBody.id, error: null };
+  }
+
   if (typeof window !== 'undefined') {
     window.HypeAudio = {
       listClips: listClips,
@@ -724,6 +759,7 @@
       setArtworkResolver: setArtworkResolver,
       onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
+      sendToContentIdea: sendToContentIdea,
       migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,

@@ -121,7 +121,6 @@
   // second playClip() call stops whatever's already playing instead of layering.
   let currentAudio = null;
   let currentClipId = null;
-  let currentClip = null;
   // Consecutive playback errors while looping -- reset on any successful
   // play, so one dead storage_url skips ahead but an all-broken pool (or a
   // dead network that navigator.onLine missed) can't spin forever.
@@ -146,8 +145,13 @@
   }
 
   // The clip currently loaded (playing OR paused), null once it ends or
-  // playback is stopped -- what the now-playing bar renders from.
-  function getCurrentClip() { return currentClipId ? currentClip : null; }
+  // playback is stopped -- what the now-playing bar renders from. A fresh
+  // lookup rather than a held reference, same reasoning as onplay's
+  // play_count fix: a held clip object goes stale (repeat mode reuses one
+  // object forever) and self-heals metadata edited mid-playback for free.
+  function getCurrentClip() {
+    return currentClipId ? listClips().find(function (c) { return c.id === currentClipId; }) || null : null;
+  }
 
   // Unlike isPlaying(), true whether the clip is playing OR paused -- used to
   // tell "resume/pause this row" apart from "start a fresh queue from here".
@@ -302,7 +306,6 @@
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
     currentClipId = clip.id;
-    currentClip = clip;
     updateMediaSessionMetadata(clip);
     // play_count increments on the real onplay event, not right after calling
     // .play() -- that promise can reject (autoplay policy, offline, a bad
@@ -313,6 +316,12 @@
     // the same listen, not a new one.
     let counted = false;
     audio.onplay = function () {
+      // A pause() called before .play()'s promise settles doesn't retract
+      // the already-queued 'play' event (a real, documented browser
+      // behavior, not a hypothetical) -- without this guard, rapidly
+      // skipping past a clip before it audibly starts still recorded a
+      // phantom play_count for it once its delayed onplay fired.
+      if (audio !== currentAudio) return;
       errorStreak = 0;
       if (!counted) {
         counted = true;
@@ -428,7 +437,6 @@
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     currentAudio = null;
     currentClipId = null;
-    currentClip = null;
     errorStreak = 0;
     notifyChange();
   }
@@ -443,6 +451,24 @@
       return currentAudio;
     }
     return playClip(clip);
+  }
+
+  // One-time-in-effect migration: normalizes any legacy mixed-case mentality
+  // (from before uploads started lowercasing it) to lowercase. Without this,
+  // e.g. "Goggins" and "goggins" clips form two separate subcat tiles
+  // (renderSubcats groups by exact-match c.mentality) and the mixed-case one
+  // silently falls through to default clip-art (also an exact-match lookup
+  // against an all-lowercase manifest). Idempotent.
+  function migrateMentalityCasing() {
+    const clips = listClips();
+    let changed = false;
+    clips.forEach(function (c) {
+      if (typeof c.mentality === 'string') {
+        const normalized = c.mentality.trim().toLowerCase();
+        if (normalized !== c.mentality) { c.mentality = normalized; changed = true; }
+      }
+    });
+    if (changed) saveClips(clips);
   }
 
   // One-time-in-effect migration: clips tagged pillar:'iron' whose mentality
@@ -511,6 +537,11 @@
   async function uploadClipFile(file) {
     var secret = getUploadSecret();
     if (!secret) return { url: null, error: 'Upload cancelled — no passphrase entered.' };
+    // Neither the signed-URL flow nor the Storage bucket's file_size_limit
+    // enforce a lower bound (that constraint is a maximum only) -- an empty
+    // file would otherwise sail through and persist as a clip with a
+    // permanently-broken 0-byte storage_url.
+    if (file.size === 0) return { url: null, error: 'That file is empty.' };
     if (file.size > MAX_UPLOAD_BYTES) return { url: null, error: 'File too big — max 25MB for an audio clip.' };
 
     var res;
@@ -581,6 +612,7 @@
       setArtworkResolver: setArtworkResolver,
       onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
+      migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
     };
@@ -613,8 +645,10 @@
       pickFavoriteWeighted: pickFavoriteWeighted,
       playFavoritesWeightedLoop: playFavoritesWeightedLoop,
       isPlayingFavoritesWeighted: isPlayingFavoritesWeighted,
+      migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
+      uploadClipFile: uploadClipFile,
     };
   }
 })();

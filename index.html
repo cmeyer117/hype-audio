@@ -410,6 +410,7 @@
       appKey: 'hype-audio',
       syncedKeys: ['hype_audio'],
       onApplied: function () {
+        HypeAudio.migrateMentalityCasing();
         HypeAudio.migrateGogginsToMindset();
         HypeAudio.migrateCarlToOwnPillar();
         renderHome();
@@ -898,8 +899,10 @@
       renderSubcats(currentPillar);
     });
 
-    // One-time-in-effect migrations (Goggins -> Mindset, Carl's-own-voice ->
-    // Carl) — idempotent, safe to run on every load.
+    // One-time-in-effect migrations (mentality casing normalized first, since
+    // the pillar migrations below key off it; Goggins -> Mindset, Carl's-own-
+    // voice -> Carl) — idempotent, safe to run on every load.
+    HypeAudio.migrateMentalityCasing();
     HypeAudio.migrateGogginsToMindset();
     HypeAudio.migrateCarlToOwnPillar();
 

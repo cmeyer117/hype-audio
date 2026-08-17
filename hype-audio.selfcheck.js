@@ -284,5 +284,44 @@ global.alert = function () {};
 const offlineAudio = HypeAudio.playClip(errClips[0]);
 offlineAudio.onerror();
 assertEqual(HypeAudio.getCurrentClip(), null, 'an offline playback error stops playback instead of leaving a dead resumable state');
+delete global.navigator;
+delete global.alert;
 
-console.log('hype-audio.selfcheck.js: all assertions passed');
+// getCurrentClip does a fresh lookup, not a held reference -- self-heals a
+// title edited mid-playback instead of serving a stale snapshot.
+const freshTestAudio = HypeAudio.playClip(HypeAudio.listActiveClips().find(c => c.id === 'fav1'));
+HypeAudio.updateClip('fav1', { title: 'Edited Mid-Playback' });
+assertEqual(HypeAudio.getCurrentClip().title, 'Edited Mid-Playback', 'getCurrentClip reflects a metadata edit made while the clip is still playing, not a stale snapshot');
+HypeAudio.stopPlayback();
+
+// onplay staleness guard -- pause() called before a play() promise settles
+// doesn't retract the already-queued 'play' event in real browsers, so a
+// skipped clip's onplay can still fire after a newer clip has taken over.
+// It must be a no-op then, same as onended/onerror already guard.
+const staleA = HypeAudio.playClip(HypeAudio.listActiveClips().find(c => c.id === 'fav1'));
+const countBeforeStaleFire = HypeAudio.listClips().find(c => c.id === 'fav1').play_count || 0;
+const staleB = HypeAudio.playClip(HypeAudio.listActiveClips().find(c => c.id === 'fav2'));
+staleA.onplay(); // A's Audio element is stale now that B has taken over
+assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').play_count, countBeforeStaleFire, 'a stale Audio\'s late onplay does not record a phantom play_count for the clip the user already skipped past');
+assertEqual(HypeAudio.getCurrentClip().id, 'fav2', 'a stale Audio\'s late onplay does not disturb which clip is actually current');
+HypeAudio.stopPlayback();
+
+// migrateMentalityCasing -- normalizes legacy mixed-case mentality so it
+// doesn't form a second, separate subcat tile from lowercase new uploads.
+HypeAudio.addClip({ id: 'casing1', title: 'Mixed Case', mentality: 'Goggins Legacy', pillar: 'iron', play_count: 0 });
+HypeAudio.migrateMentalityCasing();
+assertEqual(HypeAudio.listClips().find(c => c.id === 'casing1').mentality, 'goggins legacy', 'migrateMentalityCasing lowercases a legacy mixed-case mentality');
+HypeAudio.migrateMentalityCasing();
+assertEqual(HypeAudio.listClips().find(c => c.id === 'casing1').mentality, 'goggins legacy', 'migration is idempotent');
+
+// uploadClipFile rejects a 0-byte file before ever hitting the network --
+// neither the signed-URL flow nor the Storage bucket's file_size_limit
+// (a maximum only) reject an empty file otherwise.
+(async function () {
+  store['hype_audio_upload_secret'] = 'test-secret'; // pre-seed so getUploadSecret skips window.prompt
+  const result = await HypeAudio.uploadClipFile({ size: 0, name: 'empty.mp3', type: 'audio/mpeg' });
+  assertEqual(result.url, null, 'uploadClipFile rejects a 0-byte file');
+  assertEqual(typeof result.error === 'string' && result.error.length > 0, true, 'uploadClipFile gives a real error message for a 0-byte file');
+
+  console.log('hype-audio.selfcheck.js: all assertions passed');
+})();

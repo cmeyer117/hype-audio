@@ -314,6 +314,20 @@ assertEqual(HypeAudio.listClips().find(c => c.id === 'casing1').mentality, 'gogg
 HypeAudio.migrateMentalityCasing();
 assertEqual(HypeAudio.listClips().find(c => c.id === 'casing1').mentality, 'goggins legacy', 'migration is idempotent');
 
+// toggleDislikeCooldown / isOnCooldown -- an explicit "Not now" action that
+// excludes a clip from random/favorites picks for 1 day, then it's
+// automatically back in rotation.
+HypeAudio.addClip({ id: 'shuffle1', title: 'Shuffle Test A', mentality: 'test', pillar: 'iron', play_count: 0 });
+assertEqual(HypeAudio.isOnCooldown(HypeAudio.listClips().find(c => c.id === 'shuffle1')), false, 'a fresh clip is not on cooldown');
+HypeAudio.toggleDislikeCooldown('shuffle1');
+const cooledClip = HypeAudio.listClips().find(c => c.id === 'shuffle1');
+assertEqual(HypeAudio.isOnCooldown(cooledClip), true, 'toggleDislikeCooldown puts the clip on cooldown');
+assertEqual(cooledClip.disliked_until > Date.now(), true, 'disliked_until is set in the future');
+assertEqual(cooledClip.disliked_until <= Date.now() + 24 * 60 * 60 * 1000, true, 'disliked_until is at most 1 day out');
+HypeAudio.toggleDislikeCooldown('shuffle1');
+assertEqual(HypeAudio.isOnCooldown(HypeAudio.listClips().find(c => c.id === 'shuffle1')), false, 'toggling again while on cooldown clears it');
+HypeAudio.toggleDislikeCooldown('nonexistent-id'); // must not throw
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

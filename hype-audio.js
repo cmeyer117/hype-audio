@@ -134,6 +134,20 @@
   let randomFilter = null;
   let repeatClip = null;
 
+  // 1-day cooldown, set explicitly via toggleDislikeCooldown -- see
+  // docs/superpowers/specs/2026-08-17-smarter-shuffle-design.md.
+  const DISLIKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+  function isOnCooldown(clip) {
+    return !!(clip && clip.disliked_until && clip.disliked_until > Date.now());
+  }
+
+  function toggleDislikeCooldown(clipId) {
+    const clip = listClips().find(function (c) { return c.id === clipId; });
+    if (!clip) return;
+    updateClip(clipId, { disliked_until: isOnCooldown(clip) ? null : Date.now() + DISLIKE_COOLDOWN_MS });
+  }
+
   function notifyChange() { if (onChangeCb) onChangeCb(); }
 
   // Subscribe to play/pause/end state changes so the UI can re-render the
@@ -615,6 +629,8 @@
       migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
+      isOnCooldown: isOnCooldown,
+      toggleDislikeCooldown: toggleDislikeCooldown,
     };
     setupMediaSessionHandlers();
   }
@@ -648,6 +664,8 @@
       migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
+      isOnCooldown: isOnCooldown,
+      toggleDislikeCooldown: toggleDislikeCooldown,
       uploadClipFile: uploadClipFile,
     };
   }

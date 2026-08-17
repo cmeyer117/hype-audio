@@ -62,7 +62,8 @@
       (!pillars || pillars.indexOf(c.pillar) !== -1)
     );
     if (pool.length === 0) return null;
-    return pool[Math.floor(Math.random() * pool.length)];
+    const eligible = filterEligiblePool(pool);
+    return eligible[Math.floor(Math.random() * eligible.length)];
   }
 
   // Case-insensitive substring match across title + transcript_text. A
@@ -146,6 +147,22 @@
     const clip = listClips().find(function (c) { return c.id === clipId; });
     if (!clip) return;
     updateClip(clipId, { disliked_until: isOnCooldown(clip) ? null : Date.now() + DISLIKE_COOLDOWN_MS });
+  }
+
+  // Ephemeral, never synced -- mirrors queue/randomFilter's module-level
+  // state. Resets on page load; repeat-avoidance is a live-session nicety.
+  let recentlyPlayed = [];
+  const RECENT_WINDOW = 5;
+
+  // Narrows `pool` by cooldown + recency, each with a fallback to
+  // guarantee a non-empty result whenever `pool` itself is non-empty -- so
+  // a 2-clip mentality where both are cooling down still plays something,
+  // and a pool of exactly the 5 most-recent clips still plays something.
+  function filterEligiblePool(pool) {
+    const notOnCooldown = pool.filter(function (c) { return !isOnCooldown(c); });
+    const base = notOnCooldown.length ? notOnCooldown : pool;
+    const notRecent = base.filter(function (c) { return recentlyPlayed.indexOf(c.id) === -1; });
+    return notRecent.length ? notRecent : base;
   }
 
   function notifyChange() { if (onChangeCb) onChangeCb(); }
@@ -343,6 +360,8 @@
         // (repeat mode reuses one object forever, so counts never accumulated).
         const fresh = listClips().find(function (c) { return c.id === clip.id; });
         updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 });
+        recentlyPlayed.push(clip.id);
+        if (recentlyPlayed.length > RECENT_WINDOW) recentlyPlayed.shift();
       }
       notifyChange();
     };

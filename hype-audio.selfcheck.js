@@ -328,6 +328,41 @@ HypeAudio.toggleDislikeCooldown('shuffle1');
 assertEqual(HypeAudio.isOnCooldown(HypeAudio.listClips().find(c => c.id === 'shuffle1')), false, 'toggling again while on cooldown clears it');
 HypeAudio.toggleDislikeCooldown('nonexistent-id'); // must not throw
 
+// filterEligiblePool (via pickRandom) -- cooldown exclusion, with a
+// fallback so an all-cooled-down pool still returns a pick.
+HypeAudio.addClip({ id: 'shuffle2', title: 'Shuffle Test B', mentality: 'shuffletest', pillar: 'iron', play_count: 0 });
+HypeAudio.addClip({ id: 'shuffle3', title: 'Shuffle Test C', mentality: 'shuffletest', pillar: 'iron', play_count: 0 });
+HypeAudio.toggleDislikeCooldown('shuffle2');
+for (let i = 0; i < 10; i++) {
+  assertEqual(HypeAudio.pickRandom({ mentality: 'shuffletest' }).id, 'shuffle3', 'pickRandom excludes a clip on cooldown when an eligible one exists');
+}
+HypeAudio.toggleDislikeCooldown('shuffle3'); // now both shuffle2 and shuffle3 are on cooldown
+const bothCooledPick = HypeAudio.pickRandom({ mentality: 'shuffletest' });
+assertEqual(['shuffle2', 'shuffle3'].indexOf(bothCooledPick.id) !== -1, true, 'pickRandom still returns a pick when the whole pool is on cooldown (fallback engages)');
+HypeAudio.toggleDislikeCooldown('shuffle2'); // clear both for the recency test below
+HypeAudio.toggleDislikeCooldown('shuffle3');
+
+// No-repeat window -- a clip just played is excluded from the next pick as
+// long as an alternative exists in the same pool. The Node Audio shim
+// doesn't auto-fire 'play' (see the shim near the top of this file), so
+// onplay must be invoked manually -- same pattern the play_count tests
+// above already use (e.g. `countAudio.onplay()`). recentlyPlayed is
+// populated inside onplay, not by playClip() itself.
+const shuffle2Audio = HypeAudio.playClip(HypeAudio.listClips().find(c => c.id === 'shuffle2'));
+shuffle2Audio.onplay();
+for (let i = 0; i < 10; i++) {
+  assertEqual(HypeAudio.pickRandom({ mentality: 'shuffletest' }).id, 'shuffle3', 'pickRandom avoids repicking the clip that just played when an alternative exists');
+}
+HypeAudio.stopPlayback();
+
+// Recency fallback -- a pool of exactly one clip still returns that clip
+// even after it was "just played" (recency filter would otherwise empty it).
+HypeAudio.addClip({ id: 'shuffle4', title: 'Shuffle Test D', mentality: 'shuffleonly', pillar: 'iron', play_count: 0 });
+const shuffle4Audio = HypeAudio.playClip(HypeAudio.listClips().find(c => c.id === 'shuffle4'));
+shuffle4Audio.onplay();
+assertEqual(HypeAudio.pickRandom({ mentality: 'shuffleonly' }).id, 'shuffle4', 'pickRandom falls back to the just-played clip when it is the only one in the pool');
+HypeAudio.stopPlayback();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

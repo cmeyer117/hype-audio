@@ -164,6 +164,15 @@
     return clip;
   }
 
+  // Single-shot: pick one clip from `modeKey`'s pool and play it -- the
+  // shape Row's rest-timer wants (one clip per logged set), not an
+  // endless loop. Mirrors playPrRant/playMidSetHype exactly.
+  function playStateMode(modeKey) {
+    const clip = pickRandom({ stateMode: modeKey });
+    if (clip) playClip(clip);
+    return clip;
+  }
+
   // Only one clip should ever be audible at once — module-level handle so a
   // second playClip() call stops whatever's already playing instead of layering.
   let currentAudio = null;
@@ -256,7 +265,8 @@
   function isPlayingRandomFilter(filter) {
     if (!randomFilter) return false;
     filter = filter || {};
-    return randomFilter.pillar === filter.pillar && randomFilter.mentality === filter.mentality && randomFilter.moment === filter.moment;
+    return randomFilter.pillar === filter.pillar && randomFilter.mentality === filter.mentality &&
+      randomFilter.moment === filter.moment && randomFilter.stateMode === filter.stateMode;
   }
 
   // Favorite-weighted pick: favorited clips are ~4x as likely to be
@@ -684,6 +694,7 @@
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,
       playPrRant: playPrRant,
+      playStateMode: playStateMode,
       playClip: playClip,
       playFromList: playFromList,
       playRandomLoop: playRandomLoop,
@@ -727,6 +738,7 @@
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,
       playPrRant: playPrRant,
+      playStateMode: playStateMode,
       mediaSessionNext: mediaSessionNext,
       mediaSessionPrevious: mediaSessionPrevious,
       getCurrentClip: getCurrentClip,

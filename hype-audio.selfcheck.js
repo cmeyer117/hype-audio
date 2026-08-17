@@ -407,6 +407,25 @@ for (let i = 0; i < 15; i++) {
 }
 HypeAudio.toggleDislikeCooldown('mode1'); // clear for cleanliness
 
+// playStateMode -- single-shot wrapper Row calls (mirrors playPrRant's
+// exact shape: pick once, play once, return the clip or null).
+HypeAudio.addClip({ id: 'heavy1', title: 'Heavy Test', pillar: 'mindset', mentality: 'goggins', play_count: 0 });
+const heavyPick = HypeAudio.playStateMode('heavy_day');
+assertEqual(!!heavyPick, true, 'playStateMode plays a clip when the mode has eligible clips');
+assertEqual(HypeAudio.getCurrentClip().id, heavyPick.id, 'playStateMode actually starts playback of the picked clip');
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.playStateMode('not_a_real_mode'), null, 'playStateMode on an unknown key returns null and plays nothing');
+assertEqual(HypeAudio.getCurrentClip(), null, 'playStateMode on an unknown key does not disturb playback state');
+
+// isPlayingRandomFilter distinguishes one state-mode loop from another
+// (and from a plain pillar/mentality or moment loop), same exact-match
+// pattern already covers for those.
+HypeAudio.playRandomLoop({ stateMode: 'need_discipline' });
+assertEqual(HypeAudio.isPlayingRandomFilter({ stateMode: 'need_discipline' }), true, 'isPlayingRandomFilter is true for the exact active state-mode loop');
+assertEqual(HypeAudio.isPlayingRandomFilter({ stateMode: 'heavy_day' }), false, 'isPlayingRandomFilter is false for a different state mode');
+assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'mindset' }), false, 'isPlayingRandomFilter is false for a plain pillar filter while a state-mode loop is active');
+HypeAudio.stopPlayback();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

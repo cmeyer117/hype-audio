@@ -243,6 +243,7 @@
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
     <div class="tiles" id="tiles"></div>
     <div class="moment-row" id="moment-row"></div>
+    <div class="moment-row" id="state-mode-row"></div>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -501,6 +502,29 @@
           renderHome();
         };
         momentRow.appendChild(btn);
+      });
+
+      const STATE_MODES_UI = [
+        { key: 'heavy_day', label: 'Heavy Day' },
+        { key: 'need_discipline', label: 'Need Discipline' },
+        { key: 'post_failure_reset', label: 'Post-Failure Reset' },
+        { key: 'locked_in', label: 'Locked In' },
+      ];
+      const stateModeRow = document.getElementById('state-mode-row');
+      stateModeRow.innerHTML = '';
+      STATE_MODES_UI.forEach(function (m) {
+        const active = HypeAudio.isPlayingRandomFilter({ stateMode: m.key });
+        const btn = document.createElement('button');
+        btn.className = 'moment-btn' + (active ? ' active' : '');
+        btn.type = 'button';
+        btn.textContent = active ? '■ STOP' : m.label;
+        btn.onclick = function () {
+          if (HypeAudio.isPlayingRandomFilter({ stateMode: m.key })) { HypeAudio.stopPlayback(); renderHome(); return; }
+          const clip = HypeAudio.playRandomLoop({ stateMode: m.key });
+          if (!clip) { alert('No ' + m.label.toLowerCase() + ' clips yet.'); return; }
+          renderHome();
+        };
+        stateModeRow.appendChild(btn);
       });
     }
 

@@ -1,8 +1,10 @@
 // Hype Audio — shared core logic (metadata list + Storage upload).
-// This repo is the canonical copy. Row carries an older, deliberately
-// trailing subset (no upload support; its sync.js also diverged for Row's
-// auth) — the original "byte-identical in both repos" convention is dead
-// as of 2026-08-16. No build step, no bundler.
+// This repo is the canonical copy; Row's copy is re-synced from here by
+// hand whenever this file changes (Row doesn't use uploadClipFile --
+// gym.html only calls playMidSetHype/playPrRant -- but keeping it
+// byte-identical means the mini-player playback fixes always carry over
+// too). Row's sync.js is NOT kept in sync -- it has its own real
+// divergence for Row's owner-auth token handling. No build step, no bundler.
 (function () {
   'use strict';
   const LS_KEY = 'hype_audio';

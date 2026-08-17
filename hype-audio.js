@@ -222,8 +222,9 @@
       (!pillars || pillars.indexOf(c.pillar) !== -1)
     );
     if (pool.length === 0) return null;
+    const eligible = filterEligiblePool(pool);
     const weighted = [];
-    pool.forEach(function (c) {
+    eligible.forEach(function (c) {
       const weight = c.favorite ? 4 : 1;
       for (let i = 0; i < weight; i++) weighted.push(c);
     });

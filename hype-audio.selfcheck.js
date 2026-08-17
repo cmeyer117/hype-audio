@@ -363,6 +363,16 @@ shuffle4Audio.onplay();
 assertEqual(HypeAudio.pickRandom({ mentality: 'shuffleonly' }).id, 'shuffle4', 'pickRandom falls back to the just-played clip when it is the only one in the pool');
 HypeAudio.stopPlayback();
 
+// filterEligiblePool applies to pickFavoriteWeighted too -- the previous
+// block only covered pickRandom.
+HypeAudio.addClip({ id: 'shuffle5', title: 'Shuffle Test E', mentality: 'favshuffletest', pillar: 'iron', favorite: true, play_count: 0 });
+HypeAudio.addClip({ id: 'shuffle6', title: 'Shuffle Test F', mentality: 'favshuffletest', pillar: 'iron', favorite: true, play_count: 0 });
+HypeAudio.toggleDislikeCooldown('shuffle5');
+for (let i = 0; i < 10; i++) {
+  assertEqual(HypeAudio.pickFavoriteWeighted({ mentality: 'favshuffletest' }).id, 'shuffle6', 'pickFavoriteWeighted excludes a clip on cooldown when an eligible one exists');
+}
+HypeAudio.toggleDislikeCooldown('shuffle5'); // clear for cleanliness
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

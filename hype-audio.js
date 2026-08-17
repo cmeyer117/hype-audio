@@ -149,8 +149,12 @@
     updateClip(clipId, { disliked_until: isOnCooldown(clip) ? null : Date.now() + DISLIKE_COOLDOWN_MS });
   }
 
-  // Ephemeral, never synced -- mirrors queue/randomFilter's module-level
-  // state. Resets on page load; repeat-avoidance is a live-session nicety.
+  // Ephemeral, never synced -- reset by every mode-starter (playClip,
+  // playRepeat, playFromList, playRandomLoop, playFavoritesWeightedLoop)
+  // and by stopPlayback, same trigger points as errorStreak. Scoped to "the
+  // current playback session," not to any one filter -- without the reset,
+  // clips played via one pool (e.g. a broad moment loop) would suppress
+  // themselves from an unrelated pool's picks too (code review, 2026-08-17).
   let recentlyPlayed = [];
   const RECENT_WINDOW = 5;
 
@@ -241,6 +245,7 @@
     repeatClip = null;
     randomFilter = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     const clip = pickFavoriteWeighted(filter);
     if (!clip) { favoritesFilter = null; return null; }
     favoritesFilter = filter || {};
@@ -412,15 +417,19 @@
     notifyChange();
   }
 
-  // Every mode-starter resets errorStreak: the guard is per playback
-  // session, and a streak left over from an earlier failed queue would
-  // otherwise stop a brand-new session on its first error.
+  // Every mode-starter resets errorStreak and recentlyPlayed: both guards
+  // are per playback session -- a streak or recency window left over from
+  // an earlier session would otherwise leak into a brand-new one (an
+  // earlier-session streak could false-stop it on the first error; an
+  // earlier-session recentlyPlayed could suppress clips in a pool that
+  // never actually played anything yet).
   function playClip(clip) {
     queue = null;
     randomFilter = null;
     repeatClip = null;
     favoritesFilter = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     return playSingle(clip);
   }
 
@@ -432,6 +441,7 @@
     repeatClip = clip;
     favoritesFilter = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     return playSingle(clip);
   }
 
@@ -445,6 +455,7 @@
     repeatClip = null;
     favoritesFilter = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     queue = { clips: clips, index: idx };
     return playSingle(clips[idx]);
   }
@@ -457,6 +468,7 @@
     repeatClip = null;
     favoritesFilter = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     const clip = pickRandom(filter);
     if (!clip) { randomFilter = null; return null; }
     randomFilter = filter || {};
@@ -472,6 +484,7 @@
     currentAudio = null;
     currentClipId = null;
     errorStreak = 0;
+    recentlyPlayed = [];
     notifyChange();
   }
 

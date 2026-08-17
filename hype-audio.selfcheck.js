@@ -373,6 +373,19 @@ for (let i = 0; i < 10; i++) {
 }
 HypeAudio.toggleDislikeCooldown('shuffle5'); // clear for cleanliness
 
+// recentlyPlayed is scoped to "the current playback session," not global
+// forever -- code review caught that without a reset in every mode-starter,
+// clips played via one pool would suppress themselves from an unrelated
+// pool's picks too. Play shuffle3 via one filter, then start a fresh
+// session against a completely different pool and confirm nothing there
+// is wrongly excluded.
+HypeAudio.addClip({ id: 'shuffle7', title: 'Shuffle Test G', mentality: 'unrelatedpool', pillar: 'faith', play_count: 0 });
+const bleedAudio = HypeAudio.playClip(HypeAudio.listClips().find(c => c.id === 'shuffle3'));
+bleedAudio.onplay(); // shuffle3 now in recentlyPlayed
+HypeAudio.playRandomLoop({ mentality: 'unrelatedpool' }); // a fresh mode-starter -- must reset recentlyPlayed
+assertEqual(HypeAudio.pickRandom({ mentality: 'unrelatedpool' }).id, 'shuffle7', 'starting a new session against an unrelated pool is not contaminated by a different pool\'s recent plays');
+HypeAudio.stopPlayback();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

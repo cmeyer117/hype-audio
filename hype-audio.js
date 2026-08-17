@@ -202,6 +202,7 @@
     queue = null;
     repeatClip = null;
     randomFilter = null;
+    errorStreak = 0;
     const clip = pickFavoriteWeighted(filter);
     if (!clip) { favoritesFilter = null; return null; }
     favoritesFilter = filter || {};
@@ -330,6 +331,9 @@
       if (audio !== currentAudio) return;
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         alert('This clip isn\'t downloaded yet -- needs a connection to play for the first time.');
+        // Stop cleanly rather than leave a "paused" now-playing bar whose
+        // resume button would just re-poke a terminally-errored Audio.
+        stopPlayback();
         return;
       }
       // A broken storage_url used to kill the loop silently (onended never
@@ -363,11 +367,15 @@
     notifyChange();
   }
 
+  // Every mode-starter resets errorStreak: the guard is per playback
+  // session, and a streak left over from an earlier failed queue would
+  // otherwise stop a brand-new session on its first error.
   function playClip(clip) {
     queue = null;
     randomFilter = null;
     repeatClip = null;
     favoritesFilter = null;
+    errorStreak = 0;
     return playSingle(clip);
   }
 
@@ -378,6 +386,7 @@
     randomFilter = null;
     repeatClip = clip;
     favoritesFilter = null;
+    errorStreak = 0;
     return playSingle(clip);
   }
 
@@ -390,6 +399,7 @@
     randomFilter = null;
     repeatClip = null;
     favoritesFilter = null;
+    errorStreak = 0;
     queue = { clips: clips, index: idx };
     return playSingle(clips[idx]);
   }
@@ -401,6 +411,7 @@
     queue = null;
     repeatClip = null;
     favoritesFilter = null;
+    errorStreak = 0;
     const clip = pickRandom(filter);
     if (!clip) { randomFilter = null; return null; }
     randomFilter = filter || {};

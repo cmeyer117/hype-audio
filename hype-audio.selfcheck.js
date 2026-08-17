@@ -267,4 +267,22 @@ errAudio.onerror(); // stale handler on the replaced Audio must be inert
 assertEqual(HypeAudio.getCurrentClip().id, 'fav2', 'a stale Audio\'s late onerror does not advance again');
 HypeAudio.stopPlayback();
 
+// errorStreak resets per playback session -- a streak left over from an
+// earlier failed session must not stop a brand-new one on its first error.
+const pumpAudio = HypeAudio.playClip(errClips[0]);
+pumpAudio.onerror(); pumpAudio.onerror(); pumpAudio.onerror(); pumpAudio.onerror(); // streak: 4
+const freshAudio = HypeAudio.playFromList(errClips, 'fav1');
+freshAudio.onerror(); // would hit the streak-5 stop without the per-session reset
+assertEqual(HypeAudio.getCurrentClip() && HypeAudio.getCurrentClip().id, 'fav2', 'a new playback session resets the error streak instead of inheriting a stale one');
+HypeAudio.stopPlayback();
+
+// Offline error stops playback cleanly -- no "paused" now-playing state
+// left pointing at a terminally-errored Audio.
+// Node 24's globalThis.navigator is getter-only, so plain assignment throws.
+Object.defineProperty(global, 'navigator', { value: { onLine: false }, configurable: true });
+global.alert = function () {};
+const offlineAudio = HypeAudio.playClip(errClips[0]);
+offlineAudio.onerror();
+assertEqual(HypeAudio.getCurrentClip(), null, 'an offline playback error stops playback instead of leaving a dead resumable state');
+
 console.log('hype-audio.selfcheck.js: all assertions passed');

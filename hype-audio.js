@@ -428,15 +428,74 @@
     if (changed) saveClips(clips);
   }
 
-  async function uploadClipFile(file, supa) {
-    const filename = 'clip_' + Date.now() + '_' +
-      Math.random().toString(36).slice(2, 10) + '_' + file.name;
-    const { error } = await supa.storage
-      .from('hype-audio')
-      .upload(filename, file, { contentType: file.type, upsert: false });
-    if (error) return null;
-    const { data } = supa.storage.from('hype-audio').getPublicUrl(filename);
-    return data ? data.publicUrl : null;
+  // Anonymous client-side Storage inserts are blocked by RLS (found live
+  // 2026-08-17 -- both upload forms and record-your-own's Save always
+  // returned null, silently). Uploads now route through /api/upload-clip,
+  // a server endpoint gated by a shared passphrase (this app has exactly
+  // one user and no login system -- see that file's own comment for why a
+  // full Supabase Auth flow would be overkill here).
+  var UPLOAD_SECRET_KEY = 'hype_audio_upload_secret';
+
+  function getUploadSecret() {
+    var stored = null;
+    try { stored = localStorage.getItem(UPLOAD_SECRET_KEY); } catch (e) {}
+    if (stored) return stored;
+    var entered = window.prompt('Upload passphrase:');
+    if (!entered) return null;
+    try { localStorage.setItem(UPLOAD_SECRET_KEY, entered); } catch (e) {}
+    return entered;
+  }
+
+  function clearUploadSecret() {
+    try { localStorage.removeItem(UPLOAD_SECRET_KEY); } catch (e) {}
+  }
+
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        // result is "data:<mime>;base64,<data>" -- strip the prefix.
+        var result = reader.result;
+        var comma = result.indexOf(',');
+        resolve(comma === -1 ? result : result.slice(comma + 1));
+      };
+      reader.onerror = function () { reject(reader.error); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Returns { url, error } -- error is a real, user-facing message on
+  // failure (was previously discarded, only "Upload failed" ever shown).
+  async function uploadClipFile(file) {
+    var secret = getUploadSecret();
+    if (!secret) return { url: null, error: 'Upload cancelled — no passphrase entered.' };
+
+    var fileBase64;
+    try {
+      fileBase64 = await fileToBase64(file);
+    } catch (e) {
+      return { url: null, error: 'Could not read the file.' };
+    }
+
+    var res;
+    try {
+      res = await fetch('/api/upload-clip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'audio/webm', fileBase64: fileBase64 }),
+      });
+    } catch (e) {
+      return { url: null, error: 'Network error during upload.' };
+    }
+
+    var body = {};
+    try { body = await res.json(); } catch (e) {}
+
+    if (!res.ok) {
+      if (res.status === 401) clearUploadSecret();
+      return { url: null, error: body.error || ('Upload failed (' + res.status + ').') };
+    }
+    return { url: body.url, error: null };
   }
 
   if (typeof window !== 'undefined') {

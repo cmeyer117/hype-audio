@@ -798,8 +798,8 @@
     // subcat screen lets you type a brand-new one that has no tile yet).
     async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput) {
       const file = fileInput.files[0];
-      const url = await HypeAudio.uploadClipFile(file, supa);
-      if (!url) { alert('Upload failed.'); return; }
+      const { url, error } = await HypeAudio.uploadClipFile(file);
+      if (!url) { alert(error || 'Upload failed.'); return; }
       HypeAudio.addClip({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
         title: titleInput.value,
@@ -973,8 +973,8 @@
           const parts = (recordedBlob.type || '').split('/');
           const ext = (parts[1] || 'webm').split(';')[0] || 'webm';
           const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
-          const url = await HypeAudio.uploadClipFile(file, supa);
-          if (!url) { alert('Upload failed.'); return; }
+          const { url, error } = await HypeAudio.uploadClipFile(file);
+          if (!url) { alert(error || 'Upload failed.'); return; }
           HypeAudio.addClip({
             id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
             title: document.getElementById('record-title-input').value,

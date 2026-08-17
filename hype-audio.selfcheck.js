@@ -426,6 +426,17 @@ assertEqual(HypeAudio.isPlayingRandomFilter({ stateMode: 'heavy_day' }), false, 
 assertEqual(HypeAudio.isPlayingRandomFilter({ pillar: 'mindset' }), false, 'isPlayingRandomFilter is false for a plain pillar filter while a state-mode loop is active');
 HypeAudio.stopPlayback();
 
+// hasPendingContentIdea -- eligible for the Content Ideas review queue:
+// pillar carl, has a transcript, not already sent.
+HypeAudio.addClip({ id: 'rant1', title: 'Rant Test A', pillar: 'carl', mentality: 'carl', transcript_text: 'A real transcript.', play_count: 0 });
+assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant1')), true, 'a carl clip with a transcript and not yet sent is eligible');
+HypeAudio.addClip({ id: 'rant2', title: 'Rant Test B', pillar: 'carl', mentality: 'carl', play_count: 0 });
+assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant2')), false, 'a carl clip with no transcript is not eligible');
+HypeAudio.addClip({ id: 'rant3', title: 'Rant Test C', pillar: 'carl', mentality: 'carl', transcript_text: 'Already sent.', content_idea_sent: true, play_count: 0 });
+assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant3')), false, 'a carl clip already sent is not eligible even with a transcript');
+HypeAudio.addClip({ id: 'rant4', title: 'Rant Test D', pillar: 'faith', mentality: 'grace', transcript_text: 'Not a carl clip.', play_count: 0 });
+assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant4')), false, 'a non-carl clip is never eligible, even with a transcript');
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

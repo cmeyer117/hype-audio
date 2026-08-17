@@ -612,6 +612,14 @@
   // a server endpoint gated by a shared passphrase (this app has exactly
   // one user and no login system -- see that file's own comment for why a
   // full Supabase Auth flow would be overkill here).
+  // Eligible for the Content Ideas review queue -- see
+  // docs/superpowers/specs/2026-08-17-rant-engine-design.md.
+  function hasPendingContentIdea(clip) {
+    return !!clip && clip.pillar === 'carl' &&
+      typeof clip.transcript_text === 'string' && clip.transcript_text.trim().length > 0 &&
+      clip.content_idea_sent !== true;
+  }
+
   var UPLOAD_SECRET_KEY = 'hype_audio_upload_secret';
 
   function getUploadSecret() {
@@ -721,6 +729,7 @@
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
       isOnCooldown: isOnCooldown,
       toggleDislikeCooldown: toggleDislikeCooldown,
+      hasPendingContentIdea: hasPendingContentIdea,
     };
     setupMediaSessionHandlers();
   }
@@ -757,6 +766,7 @@
       migrateCarlToOwnPillar: migrateCarlToOwnPillar,
       isOnCooldown: isOnCooldown,
       toggleDislikeCooldown: toggleDislikeCooldown,
+      hasPendingContentIdea: hasPendingContentIdea,
       uploadClipFile: uploadClipFile,
     };
   }

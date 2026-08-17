@@ -55,12 +55,22 @@
 
   function pickRandom(filter) {
     filter = filter || {};
-    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
-    const pool = listActiveClips().filter((c) =>
-      (!filter.mentality || c.mentality === filter.mentality) &&
-      (!filter.moment || c.moment === filter.moment) &&
-      (!pillars || pillars.indexOf(c.pillar) !== -1)
-    );
+    let pool;
+    if (filter.stateMode) {
+      const mode = STATE_MODES[filter.stateMode];
+      pool = mode
+        ? listActiveClips().filter(function (c) {
+            return mode.pairs.some(function (p) { return c.pillar === p.pillar && c.mentality === p.mentality; });
+          })
+        : [];
+    } else {
+      const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
+      pool = listActiveClips().filter((c) =>
+        (!filter.mentality || c.mentality === filter.mentality) &&
+        (!filter.moment || c.moment === filter.moment) &&
+        (!pillars || pillars.indexOf(c.pillar) !== -1)
+      );
+    }
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
     return eligible[Math.floor(Math.random() * eligible.length)];
@@ -92,6 +102,42 @@
     const truncated = text.slice(0, maxLen).replace(/\s+\S*$/, '');
     return (truncated || text.slice(0, maxLen)) + '…';
   }
+
+  // Pillar+mentality PAIRS, not bare mentality strings -- mentality names
+  // aren't guaranteed unique across pillars (e.g. carl/faith could collide
+  // with a hypothetical future faith-pillar mentality), so pairs avoid any
+  // cross-pillar collision. See docs/superpowers/specs/2026-08-17-state-modes-design.md.
+  const STATE_MODES = {
+    heavy_day: {
+      pairs: [
+        { pillar: 'mindset', mentality: 'goggins' },
+        { pillar: 'iron', mentality: 'training' },
+        { pillar: 'carl', mentality: 'carl' },
+        { pillar: 'faith', mentality: 'warfare' },
+      ],
+    },
+    need_discipline: {
+      pairs: [
+        { pillar: 'mindset', mentality: 'discipline' },
+        { pillar: 'mindset', mentality: 'resilience' },
+      ],
+    },
+    post_failure_reset: {
+      pairs: [
+        { pillar: 'faith', mentality: 'grace' },
+        { pillar: 'faith', mentality: 'trials' },
+        { pillar: 'carl', mentality: 'faith' },
+        { pillar: 'carl', mentality: 'mortality' },
+      ],
+    },
+    locked_in: {
+      pairs: [
+        { pillar: 'mindset', mentality: 'purpose' },
+        { pillar: 'carl', mentality: 'mastery' },
+        { pillar: 'faith', mentality: 'scripture' },
+      ],
+    },
+  };
 
   // Rest-timer "hype me up" button: prefers a mid_set-tagged clip; falls
   // back to the same iron/mindset/carl pillar pool the "Hype Me Up" home

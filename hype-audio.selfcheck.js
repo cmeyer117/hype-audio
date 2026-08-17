@@ -386,6 +386,27 @@ HypeAudio.playRandomLoop({ mentality: 'unrelatedpool' }); // a fresh mode-starte
 assertEqual(HypeAudio.pickRandom({ mentality: 'unrelatedpool' }).id, 'shuffle7', 'starting a new session against an unrelated pool is not contaminated by a different pool\'s recent plays');
 HypeAudio.stopPlayback();
 
+// STATE_MODES / pickRandom({ stateMode }) -- pillar+mentality PAIRS, not
+// bare mentality strings, so a clip matching the mentality but the wrong
+// pillar is correctly excluded.
+HypeAudio.addClip({ id: 'mode1', title: 'Mode Test A', pillar: 'mindset', mentality: 'discipline', play_count: 0 });
+HypeAudio.addClip({ id: 'mode2', title: 'Mode Test B', pillar: 'mindset', mentality: 'resilience', play_count: 0 });
+HypeAudio.addClip({ id: 'mode3', title: 'Mode Test C', pillar: 'carl', mentality: 'discipline', play_count: 0 }); // same mentality, wrong pillar -- must NOT match need_discipline
+for (let i = 0; i < 15; i++) {
+  const picked = HypeAudio.pickRandom({ stateMode: 'need_discipline' }).id;
+  assertEqual(['mode1', 'mode2'].indexOf(picked) !== -1, true, 'pickRandom({stateMode}) only returns clips matching one of the mode\'s exact pillar+mentality pairs');
+}
+assertEqual(HypeAudio.pickRandom({ stateMode: 'not_a_real_mode' }), null, 'pickRandom({stateMode}) with an unknown key returns null instead of throwing');
+
+// filterEligiblePool (cooldown exclusion, from the smarter-shuffle feature)
+// applies identically on the stateMode path -- it's the same shared call,
+// not a per-branch reimplementation.
+HypeAudio.toggleDislikeCooldown('mode1');
+for (let i = 0; i < 15; i++) {
+  assertEqual(HypeAudio.pickRandom({ stateMode: 'need_discipline' }).id, 'mode2', 'pickRandom({stateMode}) excludes a cooled-down clip the same way the plain pillar/mentality path already does');
+}
+HypeAudio.toggleDislikeCooldown('mode1'); // clear for cleanliness
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

@@ -136,20 +136,30 @@
     }
     async function pushNow(attempt) {
       attempt = attempt || 0;
-      console.log('[sync] pushNow enter', { attempt, hasSupa: !!supa, syncReady });
-      if (!supa || !syncReady) { console.log('[sync] pushNow bail: not ready'); return; }
+      if (!supa || !syncReady) return;
       const state = collect();
-      if (isTrivial(state)) { console.log('[sync] pushNow bail: trivial state'); return; }
+      if (isTrivial(state)) return;
       const json = JSON.stringify(state);
-      const matches_ = json === lastSyncedJson;
-      console.log('[sync] pushNow json check', { jsonLen: json.length, lastSyncedLen: lastSyncedJson ? lastSyncedJson.length : null, equal: matches_ });
-      if (matches_) { console.log('[sync] pushNow bail: json === lastSyncedJson'); return; }
-      const { error } = await supa.from('app_state').upsert(
-        { key: appKey, data: state, updated_at: new Date().toISOString() },
-        { onConflict: 'key' }
-      ).catch((e) => ({ error: e }));
-      console.log('[sync] pushNow upsert result', { error: error && (error.message || error) });
-      if (!error) { lastSyncedJson = json; console.log('[sync] pushNow SUCCESS, lastSyncedJson updated'); return; }
+      if (json === lastSyncedJson) return;
+      // supa.from(...).upsert(...) returns a PostgrestFilterBuilder -- a
+      // thenable, not a real Promise -- so it has no .catch() method.
+      // Chaining .catch() directly on it (an earlier "simplification" here)
+      // threw a synchronous TypeError before the request was ever sent,
+      // which silently broke every push. Confirmed live 2026-08-18 via
+      // temporary console logging (a genuine edit's write never reached
+      // Supabase, no console output, until the real exception surfaced).
+      // try/catch around a proper await is the safe pattern for these
+      // builders.
+      let error;
+      try {
+        ({ error } = await supa.from('app_state').upsert(
+          { key: appKey, data: state, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        ));
+      } catch (e) {
+        error = e;
+      }
+      if (!error) { lastSyncedJson = json; return; }
       // Route the retry/fallback timer through pushTimer (not a bare
       // setTimeout) so schedulePush's clearTimeout can still supersede a
       // pending retry with a fresh push when a new local edit arrives --
@@ -162,7 +172,7 @@
         pushTimer = setTimeout(schedulePush, 30000);
       }
     }
-    function schedulePush() { console.log('[sync] schedulePush called'); clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
+    function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
     // Guards against collect()+JSON.stringify running repeatedly for one
     // real exit -- beforeunload/pagehide/visibilitychange can all fire in
     // quick succession for a single tab-close, and visibilitychange alone
@@ -205,19 +215,16 @@
       supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       try {
         const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
-        console.log('[sync] init select result', { hasError: !!error, errorMsg: error && error.message, hasData: !!(data && data.data) });
         if (!error) {
           syncReady = true;
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
-            const changed = applyRemote(data.data);
-            console.log('[sync] init applyRemote', { changed, lastSyncedLen: lastSyncedJson.length });
+            applyRemote(data.data);
           } else if (Object.keys(collect()).length > 0) {
-            console.log('[sync] init: no remote data, pushing local');
             schedulePush();
           }
         }
-      } catch (e) { console.log('[sync] init threw', e && e.message); }
+      } catch (e) {}
       supa.channel('app_state_' + appKey)
         .on('postgres_changes', {
           event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,
@@ -225,7 +232,6 @@
           if (!payload.new || !payload.new.data) return;
           const incoming = JSON.stringify(payload.new.data);
           if (incoming === lastSyncedJson) return;
-          console.log('[sync] realtime payload applied (unexpected -- table should not be in realtime publication)');
           lastSyncedJson = incoming;
           applyRemote(payload.new.data);
         })

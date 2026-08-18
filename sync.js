@@ -141,29 +141,48 @@
       if (isTrivial(state)) return;
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
-      try {
-        const { error } = await supa.from('app_state').upsert(
-          { key: appKey, data: state, updated_at: new Date().toISOString() },
-          { onConflict: 'key' }
-        );
-        if (!error) { lastSyncedJson = json; return; }
-        throw error;
-      } catch (e) {
-        const delay = nextRetryDelayMs(attempt);
-        if (delay !== null) {
-          setTimeout(() => pushNow(attempt + 1), delay);
-        } else {
-          setTimeout(schedulePush, 30000);
-        }
+      const { error } = await supa.from('app_state').upsert(
+        { key: appKey, data: state, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      ).catch((e) => ({ error: e }));
+      if (!error) { lastSyncedJson = json; return; }
+      // Route the retry/fallback timer through pushTimer (not a bare
+      // setTimeout) so schedulePush's clearTimeout can still supersede a
+      // pending retry with a fresh push when a new local edit arrives --
+      // otherwise the debounce it exists to enforce is defeated and two
+      // pushNow calls can end up in flight at once.
+      const delay = nextRetryDelayMs(attempt);
+      if (delay !== null) {
+        pushTimer = setTimeout(() => pushNow(attempt + 1), delay);
+      } else {
+        pushTimer = setTimeout(schedulePush, 30000);
       }
     }
     function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
+    // Guards against collect()+JSON.stringify running repeatedly for one
+    // real exit -- beforeunload/pagehide/visibilitychange can all fire in
+    // quick succession for a single tab-close, and visibilitychange alone
+    // can fire repeatedly on mobile (app-switcher taps, lock/unlock).
+    let lastFlushAt = 0;
     function flushOnUnload() {
       if (!syncReady) return;
+      const now = Date.now();
+      if (now - lastFlushAt < 1000) return;
+      lastFlushAt = now;
       const state = collect();
       if (isTrivial(state)) return;
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
+      // Only mark synced once the response actually comes back ok -- a
+      // silently-failed keepalive push used to mark itself synced anyway,
+      // which meant a later successful pushNow() would see json ===
+      // lastSyncedJson and skip the write for good. That's the exact
+      // failure class this file exists to close, and the new
+      // visibilitychange listener made this path fire far more often (any
+      // backgrounding, not just real teardown) -- a background tab keeps
+      // running JS, so waiting for the real response here is safe, unlike
+      // a true beforeunload/pagehide teardown where the tab is gone either
+      // way and this distinction can't matter.
       try {
         fetch(SUPABASE_URL + '/rest/v1/app_state?on_conflict=key', {
           method: 'POST',
@@ -175,8 +194,7 @@
           },
           body: JSON.stringify({ key: appKey, data: state, updated_at: new Date().toISOString() }),
           keepalive: true,
-        }).catch(() => {});
-        lastSyncedJson = json;
+        }).then((resp) => { if (resp.ok) lastSyncedJson = json; }).catch(() => {});
       } catch (e) {}
     }
     (async function init() {

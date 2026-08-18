@@ -120,7 +120,22 @@
     // an array that's legitimately shrunk to zero items) -- that's a real,
     // valid state a consumer's own delete feature can produce.
     function isTrivial(state) { return Object.keys(state).length === 0; }
-    async function pushNow() {
+    // A push failure used to be silently swallowed with no retry -- if
+    // nothing else touched a synced key afterward (e.g. the user backgrounds
+    // the app right after the write that mattered), the change could sit
+    // unsynced indefinitely with zero indication anything was wrong.
+    // Confirmed to actually happen 2026-08-18: a content-idea "sent" flag
+    // never round-tripped for ~10 hours. Pure so it's unit-testable the same
+    // way mergeArrays is (see sync.selfcheck.js) -- returns the ms to wait
+    // before the next immediate retry, or null once attempts are exhausted
+    // (caller then falls back to one longer-delay follow-up push instead of
+    // giving up silently). Not a full persistent retry queue -- that would
+    // be over-engineering for a single-user app.
+    function nextRetryDelayMs(attempt) {
+      return attempt < 2 ? 500 * (attempt + 1) : null;
+    }
+    async function pushNow(attempt) {
+      attempt = attempt || 0;
       if (!supa || !syncReady) return;
       const state = collect();
       if (isTrivial(state)) return;
@@ -131,8 +146,16 @@
           { key: appKey, data: state, updated_at: new Date().toISOString() },
           { onConflict: 'key' }
         );
-        if (!error) lastSyncedJson = json;
-      } catch (e) {}
+        if (!error) { lastSyncedJson = json; return; }
+        throw error;
+      } catch (e) {
+        const delay = nextRetryDelayMs(attempt);
+        if (delay !== null) {
+          setTimeout(() => pushNow(attempt + 1), delay);
+        } else {
+          setTimeout(schedulePush, 30000);
+        }
+      }
     }
     function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
     function flushOnUnload() {
@@ -184,6 +207,15 @@
     })();
     window.addEventListener('beforeunload', flushOnUnload);
     window.addEventListener('pagehide', flushOnUnload);
+    // beforeunload/pagehide are unreliable on mobile Safari/PWAs for the
+    // common real-world exit -- backgrounding the app (home button, app
+    // switcher, screen lock) rather than a full page navigation/close.
+    // visibilitychange -> 'hidden' fires reliably for that case and is the
+    // recommended mobile-safe signal for "flush before we might not get
+    // another chance."
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flushOnUnload();
+    });
     window.addEventListener('storage', (e) => { if (e.key && matches(e.key)) schedulePush(); });
   };
 })();

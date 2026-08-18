@@ -10,6 +10,10 @@ const match = src.match(/function mergeArrays\([\s\S]*?\n {4}\}/);
 if (!match) { console.error('sync.selfcheck.js: mergeArrays not found in sync.js'); process.exit(1); }
 const mergeArrays = new Function('return (' + match[0].replace('function mergeArrays', 'function') + ')')();
 
+const retryMatch = src.match(/function nextRetryDelayMs\([\s\S]*?\n {4}\}/);
+if (!retryMatch) { console.error('sync.selfcheck.js: nextRetryDelayMs not found in sync.js'); process.exit(1); }
+const nextRetryDelayMs = new Function('return (' + retryMatch[0].replace('function nextRetryDelayMs', 'function') + ')')();
+
 function assertEqual(actual, expected, label) {
   const a = JSON.stringify(actual), e = JSON.stringify(expected);
   if (a !== e) { console.error(`FAIL: ${label}\n  expected: ${e}\n  actual:   ${a}`); process.exit(1); }
@@ -43,5 +47,12 @@ assertEqual(
   [{ id: 'a', deleted: true, deleted_at: 1 }],
   'a local tombstone beats a stale non-deleted remote copy of the same id'
 );
+
+// A failed push retries a couple times with backoff (500ms, 1000ms), then
+// gives up on immediate retries in favor of one longer-delay follow-up push
+// -- confirms the loop actually terminates instead of retrying forever.
+assertEqual(nextRetryDelayMs(0), 500, 'first retry waits 500ms');
+assertEqual(nextRetryDelayMs(1), 1000, 'second retry waits 1000ms');
+assertEqual(nextRetryDelayMs(2), null, 'third attempt gives up on immediate retry');
 
 console.log('sync.selfcheck.js: all assertions passed');

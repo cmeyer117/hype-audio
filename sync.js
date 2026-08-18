@@ -136,16 +136,20 @@
     }
     async function pushNow(attempt) {
       attempt = attempt || 0;
-      if (!supa || !syncReady) return;
+      console.log('[sync] pushNow enter', { attempt, hasSupa: !!supa, syncReady });
+      if (!supa || !syncReady) { console.log('[sync] pushNow bail: not ready'); return; }
       const state = collect();
-      if (isTrivial(state)) return;
+      if (isTrivial(state)) { console.log('[sync] pushNow bail: trivial state'); return; }
       const json = JSON.stringify(state);
-      if (json === lastSyncedJson) return;
+      const matches_ = json === lastSyncedJson;
+      console.log('[sync] pushNow json check', { jsonLen: json.length, lastSyncedLen: lastSyncedJson ? lastSyncedJson.length : null, equal: matches_ });
+      if (matches_) { console.log('[sync] pushNow bail: json === lastSyncedJson'); return; }
       const { error } = await supa.from('app_state').upsert(
         { key: appKey, data: state, updated_at: new Date().toISOString() },
         { onConflict: 'key' }
       ).catch((e) => ({ error: e }));
-      if (!error) { lastSyncedJson = json; return; }
+      console.log('[sync] pushNow upsert result', { error: error && (error.message || error) });
+      if (!error) { lastSyncedJson = json; console.log('[sync] pushNow SUCCESS, lastSyncedJson updated'); return; }
       // Route the retry/fallback timer through pushTimer (not a bare
       // setTimeout) so schedulePush's clearTimeout can still supersede a
       // pending retry with a fresh push when a new local edit arrives --
@@ -158,7 +162,7 @@
         pushTimer = setTimeout(schedulePush, 30000);
       }
     }
-    function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
+    function schedulePush() { console.log('[sync] schedulePush called'); clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 250); }
     // Guards against collect()+JSON.stringify running repeatedly for one
     // real exit -- beforeunload/pagehide/visibilitychange can all fire in
     // quick succession for a single tab-close, and visibilitychange alone
@@ -201,16 +205,19 @@
       supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       try {
         const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
+        console.log('[sync] init select result', { hasError: !!error, errorMsg: error && error.message, hasData: !!(data && data.data) });
         if (!error) {
           syncReady = true;
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
-            applyRemote(data.data);
+            const changed = applyRemote(data.data);
+            console.log('[sync] init applyRemote', { changed, lastSyncedLen: lastSyncedJson.length });
           } else if (Object.keys(collect()).length > 0) {
+            console.log('[sync] init: no remote data, pushing local');
             schedulePush();
           }
         }
-      } catch (e) {}
+      } catch (e) { console.log('[sync] init threw', e && e.message); }
       supa.channel('app_state_' + appKey)
         .on('postgres_changes', {
           event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,
@@ -218,6 +225,7 @@
           if (!payload.new || !payload.new.data) return;
           const incoming = JSON.stringify(payload.new.data);
           if (incoming === lastSyncedJson) return;
+          console.log('[sync] realtime payload applied (unexpected -- table should not be in realtime publication)');
           lastSyncedJson = incoming;
           applyRemote(payload.new.data);
         })

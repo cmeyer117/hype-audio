@@ -437,6 +437,70 @@ assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id
 HypeAudio.addClip({ id: 'rant4', title: 'Rant Test D', pillar: 'faith', mentality: 'grace', transcript_text: 'Not a carl clip.', play_count: 0 });
 assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant4')), false, 'a non-carl clip is never eligible, even with a transcript');
 
+// explainQueuePick -- state prioritization. Branch order must mirror
+// advance()'s own precedence (repeat > queue > randomFilter > favoritesFilter)
+// so the explanation never contradicts which pool actually produced the
+// clip, even when a context object (hypothetically) had more than one flag set.
+const explainClip = { id: 'explain1', title: 'Explain Test', favorite: false };
+const favoritedExplainClip = { id: 'explain2', title: 'Explain Test Fav', favorite: true };
+assertEqual(HypeAudio.explainQueuePick(null, {}), null, 'explainQueuePick returns null for no clip');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { repeat: true, queue: true, stateMode: 'heavy_day' }), 'Repeating this clip on loop.', 'repeat takes priority over every other mode');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { queue: true, stateMode: 'heavy_day', favorites: true }), 'Next in your queue.', 'queue takes priority over stateMode/moment/favorites');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { stateMode: 'heavy_day', moment: 'mid_set', favorites: true }), 'Matches your "Heavy Day" state.', 'stateMode takes priority over moment/favorites');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { moment: 'mid_set', favorites: true }), 'Matches your "Mid Set" moment.', 'moment takes priority over favorites');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { favorites: true, favoritesPillar: 'iron' }), 'Favorites-weighted pick from iron.', 'favorites mode names its pillar when given one');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { favorites: true }), 'Favorites-weighted pick.', 'favorites mode with no pillar still gives a clean sentence');
+assertEqual(HypeAudio.explainQueuePick(explainClip, { mentality: 'goggins' }), 'Random pick from goggins.', 'a plain mentality/pillar random pick names the mentality');
+assertEqual(HypeAudio.explainQueuePick(explainClip, {}), 'You picked this clip directly.', 'no-history fallback: an empty context (a directly-tapped clip) still gets a deterministic explanation, not a crash');
+assertEqual(HypeAudio.explainQueuePick(favoritedExplainClip, { mentality: 'goggins' }), 'Random pick from goggins (favorited).', 'a favorited clip gets the (favorited) note appended');
+assertEqual(HypeAudio.explainQueuePick(favoritedExplainClip, {}), 'You picked this clip directly (favorited).', 'the (favorited) note also applies to the direct-pick fallback');
+
+// getPlaybackContext -- read-only snapshot of the real module state behind
+// the four play modes, exercised through the actual playRandomLoop/
+// playFavoritesWeightedLoop/playRepeat/playFromList entry points (not just
+// hand-built fixtures) so this proves the snapshot matches reality, not
+// just its own shape.
+HypeAudio.addClip({ id: 'ctx1', title: 'Context Test A', pillar: 'mindset', mentality: 'goggins', play_count: 0 });
+HypeAudio.playRandomLoop({ stateMode: 'heavy_day' });
+assertEqual(HypeAudio.getPlaybackContext().stateMode, 'heavy_day', 'getPlaybackContext reports the active stateMode');
+HypeAudio.stopPlayback();
+assertEqual(HypeAudio.getPlaybackContext().stateMode, null, 'stopPlayback clears the reported stateMode');
+HypeAudio.playRepeat(HypeAudio.listClips().find(c => c.id === 'ctx1'));
+assertEqual(HypeAudio.getPlaybackContext().repeat, true, 'getPlaybackContext reports repeat mode');
+HypeAudio.stopPlayback();
+
+// submitQueueFeedback -- reversible, local-only, and never throws even for
+// a bogus clip id or direction (the "must never interrupt playback"
+// acceptance requirement -- a feedback-path failure has to fail safe).
+HypeAudio.addClip({ id: 'feedback1', title: 'Feedback Test', pillar: 'iron', mentality: 'dorian', play_count: 0, favorite: false });
+assertEqual(HypeAudio.submitQueueFeedback('feedback1', 'up'), true, 'thumbs-up on a real clip returns true');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'feedback1').favorite, true, 'thumbs-up favorites the clip');
+assertEqual(HypeAudio.submitQueueFeedback('feedback1', 'up'), true, 'thumbs-up again returns true (reversible)');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'feedback1').favorite, false, 'thumbs-up again un-favorites the clip -- feedback is reversible');
+assertEqual(HypeAudio.submitQueueFeedback('feedback1', 'down'), true, 'thumbs-down on a real clip returns true');
+assertEqual(HypeAudio.isOnCooldown(HypeAudio.listClips().find(c => c.id === 'feedback1')), true, 'thumbs-down puts the clip on the existing dislike cooldown');
+assertEqual(HypeAudio.submitQueueFeedback('feedback1', 'down'), true, 'thumbs-down again returns true (reversible)');
+assertEqual(HypeAudio.isOnCooldown(HypeAudio.listClips().find(c => c.id === 'feedback1')), false, 'thumbs-down again clears the cooldown -- feedback is reversible');
+assertEqual(HypeAudio.submitQueueFeedback('nonexistent-id', 'up'), false, 'submitQueueFeedback on an unknown clip id fails safe (returns false, does not throw)');
+assertEqual(HypeAudio.submitQueueFeedback('feedback1', 'sideways'), false, 'submitQueueFeedback with an unrecognized direction fails safe (returns false, does not throw)');
+
+// logHypeEvent / listHypeEvents -- the local event log the weekly recap
+// (item 14) reads. A real play already logs a 'play' event (wired into
+// playSingle's onplay handler); submitQueueFeedback logs its own type.
+const beforeEventCount = HypeAudio.listHypeEvents().length;
+const eventClipAudio = HypeAudio.playClip(HypeAudio.listClips().find(c => c.id === 'ctx1'));
+eventClipAudio.onplay();
+const afterPlayEvents = HypeAudio.listHypeEvents();
+assertEqual(afterPlayEvents.length, beforeEventCount + 1, 'a real play appends exactly one event to the log');
+assertEqual(afterPlayEvents[afterPlayEvents.length - 1].type, 'play', 'the appended event is type play');
+assertEqual(afterPlayEvents[afterPlayEvents.length - 1].clipId, 'ctx1', 'the play event records the right clip id');
+HypeAudio.stopPlayback();
+HypeAudio.submitQueueFeedback('feedback1', 'up'); // toggles favorite back on and logs feedback_up
+const afterFeedbackEvents = HypeAudio.listHypeEvents();
+assertEqual(afterFeedbackEvents[afterFeedbackEvents.length - 1].type, 'feedback_up', 'a thumbs-up appends a feedback_up event');
+
+console.log('hype-audio.selfcheck.js: all queue-explainer assertions passed');
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

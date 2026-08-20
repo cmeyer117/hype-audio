@@ -199,12 +199,13 @@
   }
   .nowplaying {
     pointer-events: auto;
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; gap: 4px;
     width: 100%; max-width: 460px; padding: 9px 12px;
     background: rgba(20,20,22,0.85);
     border: 1px solid var(--border-strong); border-radius: 14px;
     box-shadow: 0 12px 36px rgba(0,0,0,0.55);
   }
+  .nowplaying-row { display: flex; align-items: center; gap: 10px; }
   .nowplaying-title {
     flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 13px; font-weight: 600; color: var(--text-primary);
@@ -215,6 +216,19 @@
     color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
   .nowplaying-btn:hover { background: rgba(255,255,255,0.1); }
+  .nowplaying-explain {
+    display: flex; align-items: center; gap: 6px; padding-left: 2px;
+  }
+  .nowplaying-explain-text {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 11px; color: var(--text-tertiary);
+  }
+  .nowplaying-feedback-btn {
+    flex-shrink: 0; padding: 2px 6px; border-radius: 8px; border: 1px solid transparent;
+    background: transparent; font-size: 13px; line-height: 1; cursor: pointer; opacity: 0.6;
+  }
+  .nowplaying-feedback-btn:hover { opacity: 1; background: rgba(255,255,255,0.08); }
+  .nowplaying-feedback-btn.active { opacity: 1; border-color: var(--border-strong); background: rgba(255,255,255,0.1); }
   .tabbar-inner {
     pointer-events: auto;
     display: flex; width: 100%; max-width: 460px; gap: 4px;
@@ -242,6 +256,7 @@
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
     <button id="content-ideas-link" onclick="showContentIdeas()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
+    <button onclick="showWeeklyRecap()" style="width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid var(--border-strong); background:rgba(255,255,255,0.05); color:var(--text-primary); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;">📊 What Moved You This Week</button>
     <div class="tiles" id="tiles"></div>
     <div class="moment-row" id="moment-row"></div>
     <div class="moment-row" id="state-mode-row"></div>
@@ -363,13 +378,29 @@
     <div id="content-ideas-list"></div>
   </div>
 
+  <div id="view-weekly-recap" style="display:none; padding: 0 10px">
+    <div class="back-row">
+      <button class="back-btn" id="weekly-recap-back-btn" type="button">←</button>
+      <h1 class="view-title">Weekly Recap</h1>
+    </div>
+    <pre id="weekly-recap-text" style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 14px; line-height: 1.6; color: var(--text-primary);"></pre>
+    <button id="weekly-recap-play-suggested" type="button" class="random-play" style="display:none"></button>
+  </div>
+
 </div>
 
   <nav class="tabbar">
     <div class="nowplaying" id="nowplaying" style="display:none">
-      <span class="nowplaying-title" id="nowplaying-title"></span>
-      <button class="nowplaying-btn" id="nowplaying-toggle" type="button">⏸</button>
-      <button class="nowplaying-btn" id="nowplaying-stop" type="button">■</button>
+      <div class="nowplaying-row">
+        <span class="nowplaying-title" id="nowplaying-title"></span>
+        <button class="nowplaying-btn" id="nowplaying-toggle" type="button">⏸</button>
+        <button class="nowplaying-btn" id="nowplaying-stop" type="button">■</button>
+      </div>
+      <div class="nowplaying-explain">
+        <span class="nowplaying-explain-text" id="nowplaying-explain-text"></span>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-up" type="button" title="More like this">👍</button>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-down" type="button" title="Less like this">👎</button>
+      </div>
     </div>
     <div class="tabbar-inner" id="tabbar-inner"></div>
   </nav>
@@ -377,6 +408,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="sync.js"></script>
   <script src="hype-audio.js"></script>
+  <script src="weekly-recap.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
@@ -420,7 +452,7 @@
     // makes Row's mini-player and this app share the same library.
     window.initCloudSync({
       appKey: 'hype-audio',
-      syncedKeys: ['hype_audio'],
+      syncedKeys: ['hype_audio', 'hype_audio_events'],
       onApplied: function () {
         HypeAudio.migrateMentalityCasing();
         HypeAudio.migrateGogginsToMindset();
@@ -623,6 +655,7 @@
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('view-content-ideas').style.display = 'none';
+      document.getElementById('view-weekly-recap').style.display = 'none';
       document.getElementById('page-bg').style.backgroundImage = "url('images/home/hero-combo.png')";
       // Codex review caught this: a search result's own state (input value,
       // results shown, tiles/moment-row hidden) survived navigating back
@@ -644,6 +677,7 @@
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('view-content-ideas').style.display = 'none';
+      document.getElementById('view-weekly-recap').style.display = 'none';
       renderSubcats(key);
       renderTabbar();
     }
@@ -660,6 +694,7 @@
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = '';
       document.getElementById('view-content-ideas').style.display = 'none';
+      document.getElementById('view-weekly-recap').style.display = 'none';
       renderTitleReview();
       renderTabbar();
     }
@@ -711,9 +746,47 @@
       document.getElementById('view-section').style.display = 'none';
       document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('view-content-ideas').style.display = '';
+      document.getElementById('view-weekly-recap').style.display = 'none';
       renderContentIdeas();
       renderTabbar();
     }
+
+    // Item 14: "What moved you" weekly recap -- deterministic, local-only
+    // (see weekly-recap.js). This app has no workout-session log of its own
+    // (that's Row's domain), so workoutDates stays unsupplied here -- the
+    // recap's own no-workout-data path (tested in weekly-recap.selfcheck.js)
+    // is what actually renders today, honestly, rather than a fake join.
+    function showWeeklyRecap() {
+      if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
+      currentPillar = null;
+      currentMentality = null;
+      document.getElementById('view-home').style.display = 'none';
+      document.getElementById('view-subcat').style.display = 'none';
+      document.getElementById('view-section').style.display = 'none';
+      document.getElementById('view-title-review').style.display = 'none';
+      document.getElementById('view-content-ideas').style.display = 'none';
+      document.getElementById('view-weekly-recap').style.display = '';
+      renderWeeklyRecap();
+      renderTabbar();
+    }
+
+    function renderWeeklyRecap() {
+      const recap = WeeklyRecap.buildWeeklyRecap({});
+      document.getElementById('weekly-recap-text').textContent = recap.markdown;
+      const playBtn = document.getElementById('weekly-recap-play-suggested');
+      if (recap.suggestedQueue) {
+        playBtn.style.display = '';
+        playBtn.textContent = '▶ Play ' + mentalityLabel(recap.suggestedQueue.mentality) + ' Queue';
+        playBtn.onclick = function () {
+          const clip = HypeAudio.playRandomLoop({ mentality: recap.suggestedQueue.mentality });
+          if (!clip) { alert('No clips left in that mentality.'); return; }
+          showHome();
+        };
+      } else {
+        playBtn.style.display = 'none';
+      }
+    }
+    document.getElementById('weekly-recap-back-btn').onclick = function () { showHome(); };
 
     const CONTENT_IDEA_PILLARS = ['mindset', 'training', 'life', 'faith', 'diet'];
 
@@ -810,6 +883,7 @@
       document.getElementById('view-section').style.display = '';
       document.getElementById('view-title-review').style.display = 'none';
       document.getElementById('view-content-ideas').style.display = 'none';
+      document.getElementById('view-weekly-recap').style.display = 'none';
       renderSection(key, mentality);
       renderTabbar();
     }
@@ -971,6 +1045,12 @@
     // Persistent now-playing bar above the tab bar -- playback state used to
     // be invisible (and unstoppable) from any screen other than the exact
     // one whose button started it.
+    // Item 13: the explainer line + thumbs never touch currentAudio -- they
+    // only read getCurrentClip()/getPlaybackContext() and, on a tap, call
+    // submitQueueFeedback (which is itself wrapped and fails safe). A
+    // throwing explainQueuePick call (shouldn't happen, but this is the
+    // "must never interrupt playback" guarantee) still can't break the
+    // title/toggle/stop row above it.
     function renderNowPlaying() {
       const bar = document.getElementById('nowplaying');
       const clip = HypeAudio.getCurrentClip();
@@ -978,12 +1058,25 @@
       bar.style.display = 'flex';
       document.getElementById('nowplaying-title').textContent = clip.title || 'Untitled';
       document.getElementById('nowplaying-toggle').textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+      let explanation = '';
+      try { explanation = HypeAudio.explainQueuePick(clip, HypeAudio.getPlaybackContext()) || ''; } catch (e) {}
+      document.getElementById('nowplaying-explain-text').textContent = explanation;
+      document.getElementById('nowplaying-thumbs-up').classList.toggle('active', !!clip.favorite);
+      document.getElementById('nowplaying-thumbs-down').classList.toggle('active', HypeAudio.isOnCooldown(clip));
     }
     document.getElementById('nowplaying-toggle').onclick = function () {
       const clip = HypeAudio.getCurrentClip();
       if (clip) HypeAudio.togglePlay(clip);
     };
     document.getElementById('nowplaying-stop').onclick = function () { HypeAudio.stopPlayback(); };
+    document.getElementById('nowplaying-thumbs-up').onclick = function () {
+      const clip = HypeAudio.getCurrentClip();
+      if (clip) { HypeAudio.submitQueueFeedback(clip.id, 'up'); renderNowPlaying(); }
+    };
+    document.getElementById('nowplaying-thumbs-down').onclick = function () {
+      const clip = HypeAudio.getCurrentClip();
+      if (clip) { HypeAudio.submitQueueFeedback(clip.id, 'down'); renderNowPlaying(); }
+    };
 
     // Keep whichever row is actually playing in sync (icon flips to ▶ again
     // once a clip ends, without polling).

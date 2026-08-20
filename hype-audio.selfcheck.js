@@ -501,6 +501,27 @@ assertEqual(afterFeedbackEvents[afterFeedbackEvents.length - 1].type, 'feedback_
 
 console.log('hype-audio.selfcheck.js: all queue-explainer assertions passed');
 
+// logHypeEvent pruning: hard cap on count, and future-dated/corrupt events
+// are dropped even though their (now - e.at) age-diff would pass the
+// retention-window check.
+const seedNow = Date.now();
+store['hype_audio_events'] = JSON.stringify(
+  Array.from({ length: 2010 }, (_, i) => ({ id: 'seed' + i, type: 'play', clipId: 'x', at: seedNow - (2010 - i), updated_at: seedNow }))
+);
+HypeAudio.logHypeEvent('play', { id: 'cap-test' });
+const cappedEvents = HypeAudio.listHypeEvents();
+assertEqual(cappedEvents.length, 2000, 'logHypeEvent prunes down to the 2000-entry cap');
+assertEqual(cappedEvents[cappedEvents.length - 1].clipId, 'cap-test', 'the cap keeps the most recently logged event');
+assertEqual(cappedEvents[0].id, 'seed11', 'the cap drops the oldest entries first');
+
+store['hype_audio_events'] = JSON.stringify([
+  { id: 'future1', type: 'play', clipId: 'x', at: Date.now() + 1000 * 60 * 60 * 24, updated_at: Date.now() },
+]);
+HypeAudio.logHypeEvent('play', { id: 'after-future' });
+const eventsAfterFuture = HypeAudio.listHypeEvents();
+assertEqual(eventsAfterFuture.some((e) => e.id === 'future1'), false, 'a future-dated event is dropped even though its age-diff would pass retention');
+assertEqual(eventsAfterFuture.length, 1, 'only the newly logged event survives once the future-dated one is pruned');
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

@@ -701,6 +701,11 @@
   // clip-count scale). 90 days comfortably covers the 7-day recap window
   // with room to extend it later without a schema change.
   var EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+  // ponytail: hard cap as a backstop, not the primary pruning strategy --
+  // age-based pruning above already keeps this small for solo-user
+  // play/feedback logging. 2000 is generous headroom (~20+ events/day for
+  // 90 days) that only bites if something is logging way more than expected.
+  var EVENT_MAX_COUNT = 2000;
 
   function listHypeEvents() {
     try { return JSON.parse(localStorage.getItem(EVENTS_LS_KEY) || '[]'); }
@@ -713,7 +718,9 @@
   function logHypeEvent(type, clip) {
     try {
       var now = Date.now();
-      var events = listHypeEvents().filter(function (e) { return e && typeof e.at === 'number' && (now - e.at) <= EVENT_RETENTION_MS; });
+      var events = listHypeEvents().filter(function (e) {
+        return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
+      });
       events.push({
         id: clip.id + '|' + type + '|' + now,
         type: type,
@@ -723,6 +730,9 @@
         at: now,
         updated_at: now,
       });
+      if (events.length > EVENT_MAX_COUNT) {
+        events = events.slice(events.length - EVENT_MAX_COUNT);
+      }
       localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
     } catch (e) {}
   }

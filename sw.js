@@ -63,9 +63,14 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
     const url = event.request.url;
     if (isAudioClipRequest(url)) {
       event.respondWith(cacheFirst(stripRangeRequest(event.request), AUDIO_CACHE));
-    } else {
+    } else if (url.indexOf(self.location.origin) === 0) {
       event.respondWith(networkFirst(event.request, APP_SHELL_CACHE));
     }
+    // else: cross-origin, non-clip request (Supabase REST/Realtime, etc.) --
+    // leave uninterrupted so the browser handles it directly. The app-shell
+    // cache used to catch these too; caching a Supabase API response risked
+    // serving stale personal sync state as if it were fresh once offline
+    // (found via Codex audit 2026-08-20).
   });
 }
 

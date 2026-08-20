@@ -88,6 +88,13 @@
       if (!remote || typeof remote !== 'object') return false;
       suppressSync = true;
       let changed = false;
+      // True when the merged result pulls in a local-only entry the server
+      // hasn't seen yet (e.g. an offline edit made before this fetch/realtime
+      // payload landed). Both call sites set lastSyncedJson to the raw remote
+      // payload *before* calling applyRemote, so without this the merged-in
+      // local data would never get pushed back until some unrelated key
+      // happened to change later -- confirmed real via Codex audit 2026-08-20.
+      let divergesFromRemote = false;
       try {
         for (const k of Object.keys(remote)) {
           if (!matches(k)) continue;
@@ -98,11 +105,13 @@
             if (Array.isArray(localValue)) incomingValue = mergeArrays(incomingValue, localValue);
           }
           const incoming = JSON.stringify(incomingValue);
+          if (incoming !== JSON.stringify(remote[k])) divergesFromRemote = true;
           const local = localStorage.getItem(k);
           if (local !== incoming) { try { origSet(k, incoming); changed = true; } catch (e) {} }
         }
       } finally { suppressSync = false; }
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }
+      if (divergesFromRemote) schedulePush();
       return changed;
     }
     // Once a synced key has ever existed in localStorage, a push where NONE

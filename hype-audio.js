@@ -422,6 +422,7 @@
         // (repeat mode reuses one object forever, so counts never accumulated).
         const fresh = listClips().find(function (c) { return c.id === clip.id; });
         updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 });
+        logHypeEvent('play', clip);
         recentlyPlayed.push(clip.id);
         if (recentlyPlayed.length > RECENT_WINDOW) recentlyPlayed.shift();
       }
@@ -620,6 +621,122 @@
       clip.content_idea_sent !== true;
   }
 
+  // ---- Item 13: workout-state queue explainer ----------------------------
+
+  // Read-only snapshot of which mode is currently driving advance() -- the
+  // same four mutually-exclusive vars playSingle/advance already track,
+  // exposed so the UI can label "why this clip" without duplicating that
+  // state itself. See docs/superpowers/specs/2026-08-20-queue-explainer-recap-design.md.
+  function getPlaybackContext() {
+    return {
+      repeat: !!repeatClip,
+      queue: !!queue,
+      stateMode: (randomFilter && randomFilter.stateMode) || null,
+      moment: (randomFilter && !randomFilter.stateMode && randomFilter.moment) || null,
+      pillar: (randomFilter && !randomFilter.stateMode && !randomFilter.moment && randomFilter.pillar) || null,
+      mentality: (randomFilter && randomFilter.mentality) || null,
+      favorites: !!favoritesFilter,
+      favoritesPillar: (favoritesFilter && (favoritesFilter.mentality || favoritesFilter.pillar)) || null,
+    };
+  }
+
+  function modeLabel(key) {
+    return String(key).split('_').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+  }
+
+  // Deterministic, one-line "why this clip" explanation for whatever mode is
+  // active -- pure function over explicit args (not module closure state)
+  // for the same testability reason mediaSessionNext/Previous already use
+  // that pattern. Branch order mirrors advance()'s own precedence
+  // (repeat > queue > randomFilter > favoritesFilter) so the explanation
+  // never contradicts which pool actually produced the clip.
+  function explainQueuePick(clip, context) {
+    if (!clip) return null;
+    context = context || {};
+    var favoriteNote = clip.favorite ? ' (favorited)' : '';
+    if (context.repeat) return 'Repeating this clip on loop.';
+    if (context.queue) return 'Next in your queue' + favoriteNote + '.';
+    if (context.stateMode) return 'Matches your "' + modeLabel(context.stateMode) + '" state' + favoriteNote + '.';
+    if (context.moment) return 'Matches your "' + modeLabel(context.moment) + '" moment' + favoriteNote + '.';
+    if (context.favorites) return 'Favorites-weighted pick' + (context.favoritesPillar ? ' from ' + context.favoritesPillar : '') + '.';
+    if (context.mentality || context.pillar) return 'Random pick from ' + (context.mentality || context.pillar) + favoriteNote + '.';
+    return 'You picked this clip directly' + favoriteNote + '.';
+  }
+
+  // Local-only quick feedback: 'up' toggles the same favorite field
+  // pickFavoriteWeighted already reads; 'down' toggles the same 24h dislike
+  // cooldown pickRandom/pickFavoriteWeighted already check via isOnCooldown.
+  // Both signals stay on-device (synced only through this app's own existing
+  // Supabase app_state row -- never a new or external service) and both are
+  // reversible by calling again with the same clip/direction. Wrapped so a
+  // storage failure here can never throw back into whatever click handler
+  // (or future auto-advance path) is driving playback.
+  function submitQueueFeedback(clipId, direction) {
+    try {
+      var clip = listClips().find(function (c) { return c.id === clipId; });
+      if (!clip) return false;
+      if (direction === 'up') {
+        updateClip(clipId, { favorite: !clip.favorite });
+        logHypeEvent('feedback_up', clip);
+      } else if (direction === 'down') {
+        toggleDislikeCooldown(clipId);
+        logHypeEvent('feedback_down', clip);
+      } else {
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ---- Item 14 support: local event log for the weekly recap -------------
+  // A separate localStorage key (not the clips array) -- these are
+  // append-only history entries, not clip metadata, and pruning/merging them
+  // the way deleteClip's tombstones work would be the wrong model.
+
+  var EVENTS_LS_KEY = 'hype_audio_events';
+  // Pruned by age, not count -- a play log genuinely grows forever (unlike
+  // the clip tombstones above, which are fine never-pruned at solo-user
+  // clip-count scale). 90 days comfortably covers the 7-day recap window
+  // with room to extend it later without a schema change.
+  var EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+  // ponytail: hard cap as a backstop, not the primary pruning strategy --
+  // age-based pruning above already keeps this small for solo-user
+  // play/feedback logging. 2000 is generous headroom (~20+ events/day for
+  // 90 days) that only bites if something is logging way more than expected.
+  var EVENT_MAX_COUNT = 2000;
+
+  function listHypeEvents() {
+    try { return JSON.parse(localStorage.getItem(EVENTS_LS_KEY) || '[]'); }
+    catch (e) { return []; }
+  }
+
+  // clipId+type+timestamp as the id (not a random uuid) -- gives mergeArrays
+  // in sync.js a stable dedup key so the same real-world event logged on two
+  // devices before they've synced doesn't get double-counted once it does.
+  function logHypeEvent(type, clip) {
+    try {
+      var now = Date.now();
+      var events = listHypeEvents().filter(function (e) {
+        return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
+      });
+      events.push({
+        id: clip.id + '|' + type + '|' + now,
+        type: type,
+        clipId: clip.id,
+        pillar: clip.pillar || null,
+        mentality: clip.mentality || null,
+        at: now,
+        updated_at: now,
+      });
+      if (events.length > EVENT_MAX_COUNT) {
+        events = events.slice(events.length - EVENT_MAX_COUNT);
+      }
+      localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
+    } catch (e) {}
+  }
+
   var UPLOAD_SECRET_KEY = 'hype_audio_upload_secret';
 
   function getUploadSecret() {
@@ -766,6 +883,10 @@
       isOnCooldown: isOnCooldown,
       toggleDislikeCooldown: toggleDislikeCooldown,
       hasPendingContentIdea: hasPendingContentIdea,
+      getPlaybackContext: getPlaybackContext,
+      explainQueuePick: explainQueuePick,
+      submitQueueFeedback: submitQueueFeedback,
+      listHypeEvents: listHypeEvents,
     };
     setupMediaSessionHandlers();
   }
@@ -804,6 +925,11 @@
       toggleDislikeCooldown: toggleDislikeCooldown,
       hasPendingContentIdea: hasPendingContentIdea,
       uploadClipFile: uploadClipFile,
+      getPlaybackContext: getPlaybackContext,
+      explainQueuePick: explainQueuePick,
+      submitQueueFeedback: submitQueueFeedback,
+      listHypeEvents: listHypeEvents,
+      logHypeEvent: logHypeEvent,
     };
   }
 })();

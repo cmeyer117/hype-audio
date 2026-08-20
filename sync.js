@@ -246,7 +246,7 @@
           },
           body: JSON.stringify({ key: appKey, data: state, updated_at: new Date().toISOString() }),
           keepalive: true,
-        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     (async function init() {

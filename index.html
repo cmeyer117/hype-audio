@@ -252,6 +252,7 @@
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
+    <div id="sync-status-indicator" style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></div>
     <input type="search" id="global-search-input" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
@@ -460,6 +461,18 @@
         renderHome();
         if (currentMentality) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
+      },
+      onStatusChange: function (status, lastSyncedAt) {
+        const el = document.getElementById('sync-status-indicator');
+        if (!el) return;
+        const labels = { synced: 'Synced', saving: 'Saving…', retrying: 'Retrying…', offline: 'Offline' };
+        let text = labels[status] || status;
+        if (status === 'synced' && lastSyncedAt) {
+          const secs = Math.max(0, Math.round((Date.now() - lastSyncedAt) / 1000));
+          const ago = secs < 60 ? secs + 's ago' : Math.round(secs / 60) + 'm ago';
+          text += ' (' + ago + ')';
+        }
+        el.textContent = text;
       },
     });
 

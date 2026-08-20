@@ -143,6 +143,24 @@
     function nextRetryDelayMs(attempt) {
       return attempt < 2 ? 500 * (attempt + 1) : null;
     }
+    // Pure state->display mapping for the owner-facing status indicator
+    // (index.html renders whatever this returns). Kept separate from the
+    // state tracking below so it's unit-testable the same way mergeArrays
+    // and nextRetryDelayMs are (see sync.selfcheck.js).
+    function computeSyncStatus(s) {
+      if (s.initFailed) return 'offline';
+      if (s.pushInFlight) return 'saving';
+      if (s.retrying) return 'retrying';
+      return 'synced';
+    }
+    const statusState = { initFailed: false, pushInFlight: false, retrying: false };
+    let lastSyncedAt = null;
+    const onStatusChange = config && config.onStatusChange;
+    function updateStatus() {
+      if (typeof onStatusChange === 'function') {
+        try { onStatusChange(computeSyncStatus(statusState), lastSyncedAt); } catch (e) {}
+      }
+    }
     async function pushNow(attempt) {
       attempt = attempt || 0;
       if (!supa || !syncReady) return;
@@ -150,6 +168,8 @@
       if (isTrivial(state)) return;
       const json = JSON.stringify(state);
       if (json === lastSyncedJson) return;
+      statusState.pushInFlight = true;
+      updateStatus();
       // supa.from(...).upsert(...) returns a PostgrestFilterBuilder -- a
       // thenable, not a real Promise -- so it has no .catch() method.
       // Chaining .catch() directly on it (an earlier "simplification" here)
@@ -168,7 +188,16 @@
       } catch (e) {
         error = e;
       }
-      if (!error) { lastSyncedJson = json; return; }
+      statusState.pushInFlight = false;
+      if (!error) {
+        lastSyncedJson = json;
+        lastSyncedAt = Date.now();
+        statusState.retrying = false;
+        updateStatus();
+        return;
+      }
+      statusState.retrying = true;
+      updateStatus();
       // Route the retry/fallback timer through pushTimer (not a bare
       // setTimeout) so schedulePush's clearTimeout can still supersede a
       // pending retry with a fresh push when a new local edit arrives --
@@ -217,7 +246,7 @@
           },
           body: JSON.stringify({ key: appKey, data: state, updated_at: new Date().toISOString() }),
           keepalive: true,
-        }).then((resp) => { if (resp.ok) lastSyncedJson = json; }).catch(() => {});
+        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     (async function init() {
@@ -228,12 +257,20 @@
           syncReady = true;
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
+            lastSyncedAt = Date.now();
             applyRemote(data.data);
           } else if (Object.keys(collect()).length > 0) {
             schedulePush();
           }
+          updateStatus();
+        } else {
+          statusState.initFailed = true;
+          updateStatus();
         }
-      } catch (e) {}
+      } catch (e) {
+        statusState.initFailed = true;
+        updateStatus();
+      }
       supa.channel('app_state_' + appKey)
         .on('postgres_changes', {
           event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,

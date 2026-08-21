@@ -581,9 +581,16 @@
         btn.className = 'moment-btn' + (active ? ' active' : '');
         btn.type = 'button';
         btn.textContent = active ? '■ STOP' : m.label;
-        btn.onclick = function () {
+        btn.onclick = async function () {
           if (HypeAudio.isPlayingRandomFilter({ stateMode: m.key })) { HypeAudio.stopPlayback(); renderHome(); return; }
-          const clip = HypeAudio.playRandomLoop({ stateMode: m.key });
+          // Item 4.3: peak-week phase (from Row, via hypeFetchRowPhase) biases
+          // this loop's picks toward the mode's calmer clips -- best-effort,
+          // a failed/missing fetch just means no phase weighting this pick.
+          let phase = null;
+          try {
+            if (typeof window.hypeFetchRowPhase === 'function') phase = await window.hypeFetchRowPhase();
+          } catch (e) { phase = null; }
+          const clip = HypeAudio.playRandomLoop({ stateMode: m.key, phase: phase });
           if (!clip) { alert('No ' + m.label.toLowerCase() + ' clips yet.'); return; }
           renderHome();
         };

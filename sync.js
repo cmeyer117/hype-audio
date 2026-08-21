@@ -316,4 +316,18 @@
     ]);
     return new Set(Object.keys(data?.sessions ?? {}));
   };
+
+  // Item 4.3 (phase-aware clip selection) only needs Row's current season
+  // phase name (e.g. 'peak'), not startDate or the rest of po_coach_season --
+  // same least-privilege JSON-path narrowing as hypeFetchRowWorkoutDates above.
+  window.hypeFetchRowPhase = async function () {
+    if (!window.supabase) return null;
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000));
+    const { data } = await Promise.race([
+      supa.from('app_state').select('phase:data->po_coach_season->phase').eq('key', 'po-coach').maybeSingle(),
+      timeout,
+    ]);
+    return data?.phase ?? null;
+  };
 })();

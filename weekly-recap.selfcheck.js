@@ -58,6 +58,33 @@ assertEqual(withWorkouts.pctPlaysOnTrainingDays, 67, '2 of 3 plays landed on a t
 assertEqual(withWorkouts.markdown.indexOf('correlation, not causation') !== -1, true, 'the workout-day match is explicitly labeled correlation, not causation');
 assertEqual(withWorkouts.markdown.indexOf('No workout session data') === -1, true, 'the no-workout-data line does not appear once workoutDates is supplied');
 
+// Item 4.4: hard-week + heavy-faith-play cross-reference. Hard week = 5+
+// logged training days in the window; heavy faith play = 3+ faith-pillar
+// plays. Both must hold for the note to appear.
+const hardWeekEvents = [
+  { type: 'play', clipId: 'f1', pillar: 'faith', mentality: 'scripture', at: NOW - 1 * DAY },
+  { type: 'play', clipId: 'f2', pillar: 'faith', mentality: 'grace', at: NOW - 2 * DAY },
+  { type: 'play', clipId: 'f3', pillar: 'faith', mentality: 'warfare', at: NOW - 3 * DAY },
+  { type: 'play', clipId: 'i1', pillar: 'iron', mentality: 'dorian', at: NOW - 4 * DAY },
+];
+const hardWeekTrainingDates = ['2026-08-19', '2026-08-18', '2026-08-17', '2026-08-16', '2026-08-15'];
+const hardWeekRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: hardWeekEvents, workoutDates: hardWeekTrainingDates });
+assertEqual(hardWeekRecap.hardWeekFaithNote !== null, true, 'a hard week (5+ training days) with heavy faith plays (3+) produces a connective note');
+assertEqual(hardWeekRecap.markdown.indexOf('🙏') !== -1, true, 'the hard-week faith note appears in the rendered markdown');
+
+// A normal (non-hard) week with the same faith plays does not force the note.
+const normalWeekTrainingDates = ['2026-08-19', '2026-08-18'];
+const normalWeekRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: hardWeekEvents, workoutDates: normalWeekTrainingDates });
+assertEqual(normalWeekRecap.hardWeekFaithNote, null, 'a normal (under-5-training-day) week does not get the hard-week faith note even with heavy faith plays');
+
+// A hard week without heavy faith plays also does not force the note.
+const lowFaithEvents = [
+  { type: 'play', clipId: 'f1', pillar: 'faith', mentality: 'scripture', at: NOW - 1 * DAY },
+  { type: 'play', clipId: 'i1', pillar: 'iron', mentality: 'dorian', at: NOW - 2 * DAY },
+];
+const lowFaithRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: lowFaithEvents, workoutDates: hardWeekTrainingDates });
+assertEqual(lowFaithRecap.hardWeekFaithNote, null, 'a hard week with fewer than 3 faith plays does not get the note');
+
 // Deterministic tie-break: equal counts break alphabetically, not by
 // insertion order, so the recap never flips between two equally-true runs.
 const tie = [

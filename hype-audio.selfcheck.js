@@ -407,6 +407,43 @@ for (let i = 0; i < 15; i++) {
 }
 HypeAudio.toggleDislikeCooldown('mode1'); // clear for cleanliness
 
+// Item 4.3: phase-aware weighting -- a peak week leans the stateMode pool
+// toward its `calm: true` pair(s) (mode1 = mindset/discipline) over the
+// non-calm one (mode2 = mindset/resilience), 3x weight, not an exclusive
+// filter -- mode2 can still come up. A normal (no phase) pick sees no bias.
+let calmCount = 0;
+for (let i = 0; i < 300; i++) {
+  if (HypeAudio.pickRandom({ stateMode: 'need_discipline', phase: 'peak' }).id === 'mode1') calmCount++;
+}
+assertEqual(calmCount > 180, true, 'a peak-week pick favors the calm pair heavily (~75% expected at 3x weight, got ' + calmCount + '/300)');
+assertEqual(calmCount < 300, true, 'a peak-week pick still lets the non-calm pair come up sometimes, not an exclusive filter');
+
+let deloadCalmCount = 0;
+for (let i = 0; i < 300; i++) {
+  if (HypeAudio.pickRandom({ stateMode: 'need_discipline', phase: 'deload' }).id === 'mode1') deloadCalmCount++;
+}
+assertEqual(deloadCalmCount > 180, true, 'a deload-week pick also favors the calm pair (got ' + deloadCalmCount + '/300)');
+
+let normalCalmCount = 0;
+for (let i = 0; i < 300; i++) {
+  if (HypeAudio.pickRandom({ stateMode: 'need_discipline' }).id === 'mode1') normalCalmCount++;
+}
+assertEqual(normalCalmCount > 100 && normalCalmCount < 200, true, 'a normal week (no phase) picks roughly evenly, no calm bias (got ' + normalCalmCount + '/300)');
+
+let cutCalmCount = 0;
+for (let i = 0; i < 300; i++) {
+  if (HypeAudio.pickRandom({ stateMode: 'need_discipline', phase: 'cut' }).id === 'mode1') cutCalmCount++;
+}
+assertEqual(cutCalmCount > 100 && cutCalmCount < 200, true, 'a non-peak/deload phase (e.g. cut) does not bias toward the calm pair (got ' + cutCalmCount + '/300)');
+
+// heavy_day has no calm-tagged pair -- phase weighting is a no-op there,
+// every pick still comes from the mode's full pool.
+HypeAudio.addClip({ id: 'heavy2', title: 'Heavy Test B', pillar: 'iron', mentality: 'training', play_count: 0 });
+for (let i = 0; i < 20; i++) {
+  assertEqual(HypeAudio.pickRandom({ stateMode: 'heavy_day', phase: 'peak' }).id, 'heavy2', 'a mode with no calm pair is unaffected by phase weighting (still returns the pool\'s only member)');
+}
+HypeAudio.deleteClip('heavy2');
+
 // playStateMode -- single-shot wrapper Row calls (mirrors playPrRant's
 // exact shape: pick once, play once, return the clip or null).
 HypeAudio.addClip({ id: 'heavy1', title: 'Heavy Test', pillar: 'mindset', mentality: 'goggins', play_count: 0 });

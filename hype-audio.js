@@ -56,13 +56,17 @@
   function pickRandom(filter) {
     filter = filter || {};
     let pool;
+    let calmPairs = null;
     if (filter.stateMode) {
       const mode = STATE_MODES[filter.stateMode];
-      pool = mode
-        ? listActiveClips().filter(function (c) {
-            return mode.pairs.some(function (p) { return c.pillar === p.pillar && c.mentality === p.mentality; });
-          })
-        : [];
+      if (mode) {
+        pool = listActiveClips().filter(function (c) {
+          return mode.pairs.some(function (p) { return c.pillar === p.pillar && c.mentality === p.mentality; });
+        });
+        calmPairs = mode.pairs.filter(function (p) { return p.calm; });
+      } else {
+        pool = [];
+      }
     } else {
       const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
       pool = listActiveClips().filter((c) =>
@@ -73,6 +77,15 @@
     }
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
+    if (calmPairs && calmPairs.length && isCalmPhase(filter.phase)) {
+      const weighted = [];
+      eligible.forEach(function (c) {
+        const calm = calmPairs.some(function (p) { return c.pillar === p.pillar && c.mentality === p.mentality; });
+        const weight = calm ? PHASE_CALM_WEIGHT : 1;
+        for (let i = 0; i < weight; i++) weighted.push(c);
+      });
+      return weighted[Math.floor(Math.random() * weighted.length)];
+    }
     return eligible[Math.floor(Math.random() * eligible.length)];
   }
 
@@ -107,6 +120,8 @@
   // aren't guaranteed unique across pillars (e.g. carl/faith could collide
   // with a hypothetical future faith-pillar mentality), so pairs avoid any
   // cross-pillar collision. See docs/superpowers/specs/2026-08-17-state-modes-design.md.
+  // `calm: true` marks a pair as the calmer/focus-oriented side of its mode
+  // -- used by pickRandom's phase-aware weighting below, not a filter.
   const STATE_MODES = {
     heavy_day: {
       pairs: [
@@ -118,26 +133,34 @@
     },
     need_discipline: {
       pairs: [
-        { pillar: 'mindset', mentality: 'discipline' },
+        { pillar: 'mindset', mentality: 'discipline', calm: true },
         { pillar: 'mindset', mentality: 'resilience' },
       ],
     },
     post_failure_reset: {
       pairs: [
-        { pillar: 'faith', mentality: 'grace' },
-        { pillar: 'faith', mentality: 'trials' },
+        { pillar: 'faith', mentality: 'grace', calm: true },
+        { pillar: 'faith', mentality: 'trials', calm: true },
         { pillar: 'carl', mentality: 'faith' },
         { pillar: 'carl', mentality: 'mortality' },
       ],
     },
     locked_in: {
       pairs: [
-        { pillar: 'mindset', mentality: 'purpose' },
+        { pillar: 'mindset', mentality: 'purpose', calm: true },
         { pillar: 'carl', mentality: 'mastery' },
-        { pillar: 'faith', mentality: 'scripture' },
+        { pillar: 'faith', mentality: 'scripture', calm: true },
       ],
     },
   };
+
+  // Phase-aware weighting: during a peak week the hype queue should lean
+  // toward calmer/focus clips over max-intensity ones -- training intent,
+  // not just workout presence. ponytail: 'peak' is the only real week-level
+  // phase signal Row exposes today (its deload logic is per-exercise, not a
+  // week flag) -- add 'deload' to this check if Row ever surfaces one.
+  const PHASE_CALM_WEIGHT = 3;
+  function isCalmPhase(phase) { return phase === 'peak' || phase === 'deload'; }
 
   // Rest-timer "hype me up" button: prefers a mid_set-tagged clip; falls
   // back to the same iron/mindset/carl pillar pool the "Hype Me Up" home
@@ -167,8 +190,8 @@
   // Single-shot: pick one clip from `modeKey`'s pool and play it -- the
   // shape Row's rest-timer wants (one clip per logged set), not an
   // endless loop. Mirrors playPrRant/playMidSetHype exactly.
-  function playStateMode(modeKey) {
-    const clip = pickRandom({ stateMode: modeKey });
+  function playStateMode(modeKey, phase) {
+    const clip = pickRandom({ stateMode: modeKey, phase: phase });
     if (clip) playClip(clip);
     return clip;
   }

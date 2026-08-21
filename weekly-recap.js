@@ -89,6 +89,7 @@
     if (ups.length) lines.push('- 👍 ' + ups.length + ' time' + (ups.length === 1 ? '' : 's') + '.');
     if (downs.length) lines.push('- 👎 ' + downs.length + ' time' + (downs.length === 1 ? '' : 's') + '.');
 
+    result.hardWeekFaithNote = null;
     if (!workoutDates) {
       lines.push('', '_No workout session data available this week — showing hype-clip activity only._');
     } else {
@@ -99,6 +100,21 @@
       result.pctPlaysOnTrainingDays = pct;
       lines.push('', '- ' + pct + '% of this week\'s plays landed on a logged training day ' +
         '(correlation, not causation — this doesn\'t mean the clips caused the training).');
+
+      // Item 4.4: "hard week" reuses the training-day count already fetched
+      // above as its intensity signal -- Row's real volume/session engine
+      // (training-insight-engine.js) needs raw per-exercise exposures this
+      // app doesn't have and shouldn't fetch (least-privilege). ponytail:
+      // 5+ logged training days in the 7-day window is the whole definition;
+      // revisit if Row ever exposes a real weekly-volume number cross-app.
+      var HARD_WEEK_TRAINING_DAYS = 5;
+      var trainingDayCount = Object.keys(trainingDays).length;
+      var faithPlays = plays.filter(function (e) { return e.pillar === 'faith'; });
+      if (trainingDayCount >= HARD_WEEK_TRAINING_DAYS && faithPlays.length >= 3) {
+        result.hardWeekFaithNote = 'Faith-pillar clips played ' + faithPlays.length + ' times during a hard training week (' +
+          trainingDayCount + ' training days) — correlation, not causation.';
+        lines.push('', '- 🙏 ' + result.hardWeekFaithNote);
+      }
     }
 
     if (topMentalityEntry) {

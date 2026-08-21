@@ -765,10 +765,13 @@
     }
 
     // Item 14: "What moved you" weekly recap -- deterministic, local-only
-    // (see weekly-recap.js). This app has no workout-session log of its own
-    // (that's Row's domain), so workoutDates stays unsupplied here -- the
-    // recap's own no-workout-data path (tested in weekly-recap.selfcheck.js)
-    // is what actually renders today, honestly, rather than a fake join.
+    // math (see weekly-recap.js) over hype-clip events, joined against real
+    // Row training-day dates fetched via hypeFetchRowWorkoutDates() (sync.js
+    // -- session dates only, least-privilege Postgrest JSON path read of
+    // Row's po-coach app_state row). If the fetch fails or returns nothing
+    // (offline, Supabase not configured, no logged sessions), workoutDates
+    // stays empty and the recap's own no-workout-data path (tested in
+    // weekly-recap.selfcheck.js) renders instead of a fake join.
     function showWeeklyRecap() {
       if (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording') cancelRecording();
       currentPillar = null;
@@ -783,8 +786,14 @@
       renderTabbar();
     }
 
-    function renderWeeklyRecap() {
-      const recap = WeeklyRecap.buildWeeklyRecap({});
+    async function renderWeeklyRecap() {
+      let workoutDates = [];
+      try {
+        if (typeof window.hypeFetchRowWorkoutDates === 'function') {
+          workoutDates = Array.from(await window.hypeFetchRowWorkoutDates());
+        }
+      } catch (e) { workoutDates = []; }
+      const recap = WeeklyRecap.buildWeeklyRecap({ workoutDates: workoutDates });
       document.getElementById('weekly-recap-text').textContent = recap.markdown;
       const playBtn = document.getElementById('weekly-recap-play-suggested');
       if (recap.suggestedQueue) {

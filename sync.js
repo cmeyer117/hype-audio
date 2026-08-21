@@ -296,4 +296,21 @@
     });
     window.addEventListener('storage', (e) => { if (e.key && matches(e.key)) schedulePush(); });
   };
+
+  // weekly-recap.js's optional workoutDates input only ever needs the set of
+  // training-day dates out of Row's po-coach app_state row, not the full
+  // workout payload. Postgrest's JSON path operator narrows that
+  // server-side (data->po_coach_v1->sessions) instead of shipping Row's
+  // whole cross-app blob just to read its keys -- same least-privilege
+  // pattern as Vessel's vesselFetchRowWorkoutDates() (vessel/vessel-sync.js).
+  window.hypeFetchRowWorkoutDates = async function () {
+    if (!window.supabase) return new Set();
+    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const { data } = await supa
+      .from('app_state')
+      .select('sessions:data->po_coach_v1->sessions')
+      .eq('key', 'po-coach')
+      .maybeSingle();
+    return new Set(Object.keys(data?.sessions ?? {}));
+  };
 })();

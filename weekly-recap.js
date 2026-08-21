@@ -4,11 +4,12 @@
 // analytics API -- pure math over already-logged local events.
 //
 // This app doesn't log workout sessions itself (that's Row's domain, a
-// separate app/repo) -- workoutDates is an optional injectable input (a
-// future Row bridge could supply it) so the join is testable without
-// inventing a real schema for data this repo doesn't own. Omitted (the
-// real case today), the recap says so plainly instead of fabricating a
-// training-day correlation. See
+// separate app/repo) -- workoutDates is an optional injectable input, kept
+// separate from the fetch so the join stays testable without a real schema
+// for data this repo doesn't own. index.html now feeds it real dates via
+// hypeFetchRowWorkoutDates() (sync.js); when that fetch is unavailable or
+// empty (offline, no logged sessions), the recap says so plainly instead of
+// fabricating a training-day correlation. See
 // docs/superpowers/specs/2026-08-20-queue-explainer-recap-design.md.
 (function () {
   'use strict';

@@ -85,6 +85,25 @@ const lowFaithEvents = [
 const lowFaithRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: lowFaithEvents, workoutDates: hardWeekTrainingDates });
 assertEqual(lowFaithRecap.hardWeekFaithNote, null, 'a hard week with fewer than 3 faith plays does not get the note');
 
+// Codex review 2026-08-21: workoutDates must be scoped to this week's
+// window, not counted from Row's entire training history -- 5+ ancient
+// dates outside the 7-day window shouldn't satisfy "hard week."
+const staleTrainingDates = ['2020-01-01', '2020-01-02', '2020-01-03', '2020-01-04', '2020-01-05'];
+const staleWeekRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: hardWeekEvents, workoutDates: staleTrainingDates });
+assertEqual(staleWeekRecap.hardWeekFaithNote, null, 'training dates outside the 7-day window do not count toward a hard week');
+
+// Codex review 2026-08-21: faith plays and hard-training days must actually
+// overlap -- 3+ faith plays and 5+ training days with zero shared dates
+// should not imply a connection between them.
+const noOverlapEvents = [
+  { type: 'play', clipId: 'f1', pillar: 'faith', mentality: 'scripture', at: NOW - 6 * DAY },
+  { type: 'play', clipId: 'f2', pillar: 'faith', mentality: 'grace', at: NOW - 6 * DAY },
+  { type: 'play', clipId: 'f3', pillar: 'faith', mentality: 'warfare', at: NOW - 6 * DAY },
+];
+const noOverlapTrainingDates = ['2026-08-19', '2026-08-18', '2026-08-17', '2026-08-16', '2026-08-15'];
+const noOverlapRecap = WeeklyRecap.buildWeeklyRecap({ now: NOW, eventLog: noOverlapEvents, workoutDates: noOverlapTrainingDates });
+assertEqual(noOverlapRecap.hardWeekFaithNote, null, 'faith plays that never land on a training day do not get the hard-week note, even with enough of each independently');
+
 // Deterministic tie-break: equal counts break alphabetically, not by
 // insertion order, so the recap never flips between two equally-true runs.
 const tie = [

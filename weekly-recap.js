@@ -93,8 +93,16 @@
     if (!workoutDates) {
       lines.push('', '_No workout session data available this week — showing hype-clip activity only._');
     } else {
+      // Codex review 2026-08-21: workoutDates comes from hypeFetchRowWorkoutDates(),
+      // which returns EVERY session Row has ever logged, not scoped to this
+      // recap's 7-day window -- unfiltered, anyone with 5+ workouts ever
+      // satisfied "hard week" regardless of the actual week's data. Scope
+      // to [since, now] first, same window the plays are already filtered to.
       var trainingDays = {};
-      workoutDates.forEach(function (d) { trainingDays[d] = true; });
+      workoutDates.forEach(function (d) {
+        var t = new Date(d + 'T12:00:00').getTime();
+        if (!isNaN(t) && t >= since && t <= now) trainingDays[d] = true;
+      });
       var onTrainingDays = plays.filter(function (e) { return trainingDays[dateKey(e.at)]; }).length;
       var pct = Math.round((onTrainingDays / plays.length) * 100);
       result.pctPlaysOnTrainingDays = pct;
@@ -110,8 +118,14 @@
       var HARD_WEEK_TRAINING_DAYS = 5;
       var trainingDayCount = Object.keys(trainingDays).length;
       var faithPlays = plays.filter(function (e) { return e.pillar === 'faith'; });
-      if (trainingDayCount >= HARD_WEEK_TRAINING_DAYS && faithPlays.length >= 3) {
-        result.hardWeekFaithNote = 'Faith-pillar clips played ' + faithPlays.length + ' times during a hard training week (' +
+      // Codex review 2026-08-21: faithPlays.length and trainingDayCount used
+      // to be checked independently -- 3 faith plays early in the week and
+      // 5 hard-training days late in the week, with zero real overlap, still
+      // fired the note. Requiring the faith plays to actually land ON a
+      // training day is what makes "during a hard training week" true.
+      var faithPlaysOnTrainingDays = faithPlays.filter(function (e) { return trainingDays[dateKey(e.at)]; }).length;
+      if (trainingDayCount >= HARD_WEEK_TRAINING_DAYS && faithPlaysOnTrainingDays >= 3) {
+        result.hardWeekFaithNote = 'Faith-pillar clips played ' + faithPlaysOnTrainingDays + ' times on training days during a hard training week (' +
           trainingDayCount + ' training days) — correlation, not causation.';
         lines.push('', '- 🙏 ' + result.hardWeekFaithNote);
       }

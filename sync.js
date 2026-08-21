@@ -306,11 +306,14 @@
   window.hypeFetchRowWorkoutDates = async function () {
     if (!window.supabase) return new Set();
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    const { data } = await supa
-      .from('app_state')
-      .select('sessions:data->po_coach_v1->sessions')
-      .eq('key', 'po-coach')
-      .maybeSingle();
+    // Codex review 2026-08-21: a stalled (not rejected) request used to hang
+    // renderWeeklyRecap() indefinitely -- a timeout degrades to the same
+    // empty-state fallback a real "no data" response already produces.
+    const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000));
+    const { data } = await Promise.race([
+      supa.from('app_state').select('sessions:data->po_coach_v1->sessions').eq('key', 'po-coach').maybeSingle(),
+      timeout,
+    ]);
     return new Set(Object.keys(data?.sessions ?? {}));
   };
 })();

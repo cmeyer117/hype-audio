@@ -15,6 +15,8 @@ function loadSandbox(fakeSupa) {
   const sandbox = {
     window: { supabase: { createClient: () => fakeSupa } },
     console,
+    setTimeout,
+    clearTimeout,
   };
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
@@ -61,6 +63,20 @@ async function main() {
     const sandbox = loadSandbox(fakeSupa);
     const dates = await sandbox.window.hypeFetchRowWorkoutDates();
     assertEqual([...dates], [], 'a missing po-coach row returns an empty Set');
+  }
+
+  // A stalled (never-resolving) request degrades to an empty Set within the
+  // timeout instead of hanging renderWeeklyRecap() forever -- Codex review
+  // 2026-08-21 caught this gap in the original implementation.
+  {
+    const fakeSupa = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }),
+      }),
+    };
+    const sandbox = loadSandbox(fakeSupa);
+    const dates = await sandbox.window.hypeFetchRowWorkoutDates();
+    assertEqual([...dates], [], 'a stalled request degrades to an empty Set instead of hanging');
   }
 
   console.log('hype-fetch-row-workout-dates.selfcheck.js: all assertions passed');

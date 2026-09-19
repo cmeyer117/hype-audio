@@ -325,6 +325,24 @@
           <option value="licensed">Licensed</option>
           <option value="personal_use">Personal use only</option>
         </select>
+        <select id="use-case-input">
+          <option value="">Use case (optional)</option>
+          <option value="study_focus">Study/focus</option>
+          <option value="pre_lift">Pre-lift</option>
+          <option value="in_set">In-set</option>
+          <option value="post_workout">Post-workout</option>
+          <option value="recovery">Recovery</option>
+        </select>
+        <select id="delivery-role-input">
+          <option value="">Delivery role (optional)</option>
+          <option value="music">Music</option>
+          <option value="noise">Noise</option>
+          <option value="instrumental">Instrumental</option>
+          <option value="motivational_speech">Motivational speech</option>
+          <option value="instructional_cue">Instructional cue</option>
+          <option value="scripture_prayer">Scripture/prayer</option>
+          <option value="silence_baseline">Silence baseline</option>
+        </select>
         <button type="submit">Upload</button>
       </form>
     </details>
@@ -354,6 +372,20 @@
           <option value="personal_use" selected>Personal use only</option>
           <option value="original">Original</option>
           <option value="licensed">Licensed</option>
+        </select>
+        <select id="record-use-case-input">
+          <option value="">Use case (optional)</option>
+          <option value="study_focus">Study/focus</option>
+          <option value="pre_lift">Pre-lift</option>
+          <option value="in_set">In-set</option>
+          <option value="post_workout">Post-workout</option>
+          <option value="recovery">Recovery</option>
+        </select>
+        <select id="record-delivery-role-input">
+          <option value="" selected>Delivery role (optional)</option>
+          <option value="motivational_speech">Motivational speech</option>
+          <option value="instructional_cue">Instructional cue</option>
+          <option value="scripture_prayer">Scripture/prayer</option>
         </select>
         <button type="submit">Save</button>
       </form>
@@ -1141,6 +1173,8 @@
           pillar: pillar,
           moment: moment,
           source_type: source,
+          use_case: document.getElementById('use-case-input').value || null,
+          delivery_role: document.getElementById('delivery-role-input').value || null,
           storage_url: url,
           created_at: new Date().toISOString(),
           play_count: 0,
@@ -1322,6 +1356,8 @@
             pillar: 'carl',
             moment: document.getElementById('record-moment-input').value,
             source_type: document.getElementById('record-source-input').value,
+            use_case: document.getElementById('record-use-case-input').value || null,
+            delivery_role: document.getElementById('record-delivery-role-input').value || null,
             storage_url: url,
             created_at: new Date().toISOString(),
             play_count: 0,

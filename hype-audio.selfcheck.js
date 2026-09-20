@@ -42,12 +42,24 @@ HypeAudio.addClip({ id: '3', title: 'C', mentality: 'worship', pillar: 'faith', 
 assertEqual(HypeAudio.pickRandom({ pillar: 'iron' }), null, 'pickRandom with pillar:iron finds nothing among unmigrated/faith clips');
 assertEqual(HypeAudio.pickRandom({ pillar: 'faith' }).id, '3', 'pickRandom respects a pillar filter');
 
+// pickRandom with useCase/deliveryRole (item: Focus mode + cue sets)
+HypeAudio.addClip({ id: 'focus1', title: 'Rain', mentality: 'focustest-ambient', pillar: 'iron', use_case: 'study_focus', delivery_role: 'noise', play_count: 0 });
+HypeAudio.addClip({ id: 'focus2', title: 'Hype Speech', mentality: 'focustest-speech', pillar: 'mindset', use_case: 'study_focus', delivery_role: 'motivational_speech', play_count: 0 });
+assertEqual(HypeAudio.pickRandom({ useCase: 'study_focus', deliveryRole: ['instrumental', 'noise', 'silence_baseline'] }).id, 'focus1', 'pickRandom(useCase+deliveryRole) excludes a study_focus clip whose delivery_role is not in the list');
+assertEqual(HypeAudio.pickRandom({ useCase: 'nonexistent-use-case' }), null, 'pickRandom(useCase) returns null when nothing matches');
+assertEqual(HypeAudio.pickRandom({ deliveryRole: ['instructional_cue'] }), null, 'pickRandom(deliveryRole) alone excludes clips with no matching delivery_role among focus1/focus2');
+
+// pickRandom with mentality+deliveryRole (cue sets)
+HypeAudio.addClip({ id: 'cue1', title: 'Brace cue', mentality: 'brace', pillar: 'carl', delivery_role: 'instructional_cue', play_count: 0 });
+assertEqual(HypeAudio.pickRandom({ mentality: 'brace', deliveryRole: ['instructional_cue'] }).id, 'cue1', 'pickRandom(mentality+deliveryRole) finds the matching cue clip');
+assertEqual(HypeAudio.pickRandom({ mentality: 'brace', deliveryRole: ['motivational_speech'] }), null, 'pickRandom(mentality+deliveryRole) excludes a mentality match with the wrong delivery_role');
+
 // deleteClip is a soft-delete (tombstone) — the whole reason is so a cloud-sync
 // merge from another device/tab can't silently un-delete a clip (mergeArrays
 // in sync.js can't tell "never synced" from "deleted" once an entry is just gone).
 HypeAudio.deleteClip('3');
-assertEqual(HypeAudio.listActiveClips().map((c) => c.id), ['1', '2'], 'deleted clip drops out of listActiveClips');
-assertEqual(HypeAudio.listClips().map((c) => c.id), ['1', '2', '3'], 'deleted clip stays in listClips as a tombstone, not removed');
+assertEqual(HypeAudio.listActiveClips().map((c) => c.id), ['1', '2', 'focus1', 'focus2', 'cue1'], 'deleted clip drops out of listActiveClips');
+assertEqual(HypeAudio.listClips().map((c) => c.id), ['1', '2', '3', 'focus1', 'focus2', 'cue1'], 'deleted clip stays in listClips as a tombstone, not removed');
 assertEqual(HypeAudio.listClips().find((c) => c.id === '3').deleted, true, 'tombstone is marked deleted:true');
 assertEqual(HypeAudio.pickRandom({}).id === '3', false, 'pickRandom never returns a deleted clip');
 

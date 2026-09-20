@@ -69,10 +69,13 @@
       }
     } else {
       const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
+      const deliveryRoles = Array.isArray(filter.deliveryRole) ? filter.deliveryRole : (filter.deliveryRole ? [filter.deliveryRole] : null);
       pool = listActiveClips().filter((c) =>
         (!filter.mentality || c.mentality === filter.mentality) &&
         (!filter.moment || c.moment === filter.moment) &&
-        (!pillars || pillars.indexOf(c.pillar) !== -1)
+        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
+        (!filter.useCase || c.use_case === filter.useCase) &&
+        (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1)
       );
     }
     if (pool.length === 0) return null;

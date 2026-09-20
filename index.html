@@ -261,6 +261,7 @@
     <div class="tiles" id="tiles"></div>
     <div class="moment-row" id="moment-row"></div>
     <div class="moment-row" id="state-mode-row"></div>
+    <div class="moment-row" id="cues-row"></div>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -628,6 +629,31 @@
           renderHome();
         };
         stateModeRow.appendChild(btn);
+      });
+
+      const CUES_UI = [
+        { key: 'brace', label: 'Brace' },
+        { key: 'controlled_eccentric', label: 'Controlled Eccentric' },
+        { key: 'final_rep', label: 'Final Rep' },
+        { key: 'post_miss_reset', label: 'Post-Miss Reset' },
+      ];
+      const cuesRow = document.getElementById('cues-row');
+      cuesRow.innerHTML = '';
+      CUES_UI.forEach(function (c) {
+        const btn = document.createElement('button');
+        btn.className = 'moment-btn';
+        btn.type = 'button';
+        btn.textContent = c.label;
+        btn.onclick = function () {
+          const clip = HypeAudio.pickRandom({ mentality: c.key, deliveryRole: ['instructional_cue'] });
+          if (!clip) {
+            alert('No ' + c.label + ' cue recorded yet -- use Record a clip below, mentality: ' + c.key + ', delivery role: Instructional cue.');
+            return;
+          }
+          HypeAudio.playClip(clip);
+          HypeAudio.logHypeEvent('play', clip, { useCase: clip.use_case, deliveryRole: clip.delivery_role });
+        };
+        cuesRow.appendChild(btn);
       });
     }
 

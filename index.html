@@ -262,6 +262,27 @@
     <div class="moment-row" id="moment-row"></div>
     <div class="moment-row" id="state-mode-row"></div>
     <div class="moment-row" id="cues-row"></div>
+
+    <details id="focus-details">
+      <summary>Focus</summary>
+      <div id="focus-setup" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px;">
+        <div class="moment-row" id="focus-duration-row"></div>
+        <div class="moment-row" id="focus-sound-row"></div>
+        <button type="button" class="record-btn" id="focus-start-btn">Start Focus</button>
+      </div>
+      <div id="focus-active" style="display:none; padding: 14px 16px 16px; align-items: center; gap: 10px;">
+        <span id="focus-remaining" style="font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary);"></span>
+        <button type="button" class="record-btn" id="focus-stop-btn">⏹ Stop</button>
+      </div>
+      <div id="focus-outcome" style="display:none; padding: 14px 16px 16px; flex-direction: column; gap: 10px;">
+        <div style="font-size: 13px; color: var(--text-tertiary);">Did that help you focus?</div>
+        <div class="moment-row">
+          <button type="button" class="moment-btn" id="focus-outcome-yes">Yes</button>
+          <button type="button" class="moment-btn" id="focus-outcome-no">No</button>
+          <button type="button" class="moment-btn" id="focus-outcome-skip">Skip</button>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -1439,6 +1460,105 @@
         };
       });
     });
+
+    // --- Focus mode ---
+    (function () {
+      let focusDuration = 25; // minutes
+      let focusSound = 'audio'; // 'audio' | 'silence'
+      let focusSessionId = null;
+      let focusTimerInterval = null;
+      let focusEndAt = null;
+
+      const DURATIONS = [25, 50];
+      const durationRow = document.getElementById('focus-duration-row');
+      DURATIONS.forEach(function (d) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'moment-btn' + (d === focusDuration ? ' active' : '');
+        btn.textContent = d + ' min';
+        btn.onclick = function () {
+          focusDuration = d;
+          Array.from(durationRow.children).forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+        };
+        durationRow.appendChild(btn);
+      });
+
+      const SOUNDS = [{ key: 'audio', label: 'Audio' }, { key: 'silence', label: 'Silence' }];
+      const soundRow = document.getElementById('focus-sound-row');
+      SOUNDS.forEach(function (s) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'moment-btn' + (s.key === focusSound ? ' active' : '');
+        btn.textContent = s.label;
+        btn.onclick = function () {
+          focusSound = s.key;
+          Array.from(soundRow.children).forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+        };
+        soundRow.appendChild(btn);
+      });
+
+      function formatRemaining(ms) {
+        const totalSec = Math.max(0, Math.ceil(ms / 1000));
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        return m + ':' + (s < 10 ? '0' : '') + s;
+      }
+
+      function endFocusSession() {
+        if (focusTimerInterval) { clearInterval(focusTimerInterval); focusTimerInterval = null; }
+        // Fade-out is simplified to a hard stop for v1 -- HypeAudio's public
+        // API doesn't expose the underlying Audio element for external
+        // volume control, and adding that plumbing is more than this
+        // feature's own scope justifies (see design spec).
+        if (focusSound === 'audio') { HypeAudio.stopPlayback(); }
+        document.getElementById('focus-active').style.display = 'none';
+        document.getElementById('focus-outcome').style.display = 'flex';
+      }
+
+      function tickFocusTimer() {
+        const remaining = focusEndAt - Date.now();
+        document.getElementById('focus-remaining').textContent = formatRemaining(remaining);
+        if (remaining <= 0) { endFocusSession(); }
+      }
+
+      document.getElementById('focus-start-btn').onclick = function () {
+        focusSessionId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        focusEndAt = Date.now() + focusDuration * 60 * 1000;
+        document.getElementById('focus-setup').style.display = 'none';
+        document.getElementById('focus-outcome').style.display = 'none';
+        document.getElementById('focus-active').style.display = 'flex';
+        if (focusSound === 'audio') {
+          const focusClip = HypeAudio.playRandomLoop({ useCase: 'study_focus', deliveryRole: ['instrumental', 'noise', 'silence_baseline'] });
+          if (focusClip) {
+            HypeAudio.logHypeEvent('play', focusClip, { useCase: 'study_focus', deliveryRole: focusClip.delivery_role, sessionId: focusSessionId });
+          } else {
+            alert('No study/focus clips tagged instrumental, noise, or silence-baseline yet -- starting silent.');
+          }
+        }
+        tickFocusTimer();
+        focusTimerInterval = setInterval(tickFocusTimer, 1000);
+      };
+
+      document.getElementById('focus-stop-btn').onclick = function () { endFocusSession(); };
+
+      function finishOutcome(outcome) {
+        HypeAudio.logFocusSessionOutcome({
+          sessionId: focusSessionId,
+          durationMinutes: focusDuration,
+          sound: focusSound,
+          outcome: outcome,
+        });
+        document.getElementById('focus-outcome').style.display = 'none';
+        document.getElementById('focus-setup').style.display = 'flex';
+        document.getElementById('focus-details').removeAttribute('open');
+      }
+
+      document.getElementById('focus-outcome-yes').onclick = function () { finishOutcome('yes'); };
+      document.getElementById('focus-outcome-no').onclick = function () { finishOutcome('no'); };
+      document.getElementById('focus-outcome-skip').onclick = function () { finishOutcome('skip'); };
+    })();
 
     showHome();
   </script>

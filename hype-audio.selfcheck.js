@@ -74,7 +74,7 @@ assertEqual(HypeAudio.listClips().find((c) => c.id === '4').pillar, 'mindset', '
 
 // pickRandom accepts an array of pillars (Row's widget pulls iron+mindset together)
 const multiPick = HypeAudio.pickRandom({ pillar: ['iron', 'mindset'] });
-assertEqual(['4', '5'].indexOf(multiPick.id) !== -1, true, 'pickRandom with a pillar array matches any listed pillar');
+assertEqual(['4', '5', 'focus1', 'focus2'].indexOf(multiPick.id) !== -1, true, 'pickRandom with a pillar array matches any listed pillar');
 assertEqual(HypeAudio.pickRandom({ pillar: ['dorian-nonexistent'] }), null, 'pickRandom with a pillar array excludes non-matching pillars');
 
 // migrateCarlToOwnPillar — splits Carl's-own-voice iron clips into their own pillar
@@ -549,6 +549,24 @@ const afterFeedbackEvents = HypeAudio.listHypeEvents();
 assertEqual(afterFeedbackEvents[afterFeedbackEvents.length - 1].type, 'feedback_up', 'a thumbs-up appends a feedback_up event');
 
 console.log('hype-audio.selfcheck.js: all queue-explainer assertions passed');
+
+// logHypeEvent extra param (Focus mode / cue sets measurement)
+HypeAudio.logHypeEvent('play', { id: 'focus1', pillar: 'iron', mentality: 'focustest-ambient' }, { useCase: 'study_focus', deliveryRole: 'noise', sessionId: 'sess-1' });
+const focusLoggedEvent = HypeAudio.listHypeEvents().find((e) => e.clipId === 'focus1' && e.type === 'play');
+assertEqual(focusLoggedEvent.useCase, 'study_focus', 'logHypeEvent records useCase from the extra param');
+assertEqual(focusLoggedEvent.deliveryRole, 'noise', 'logHypeEvent records deliveryRole from the extra param');
+assertEqual(focusLoggedEvent.sessionId, 'sess-1', 'logHypeEvent records sessionId from the extra param');
+
+// Existing callers with no extra param keep working unchanged
+HypeAudio.logHypeEvent('play', { id: '1', pillar: undefined, mentality: 'goggins' });
+const plainEvent = HypeAudio.listHypeEvents().find((e) => e.clipId === '1' && e.type === 'play');
+assertEqual(plainEvent.useCase, null, 'logHypeEvent defaults useCase to null when extra is omitted');
+
+// focus_session_outcome -- no clip involved
+HypeAudio.logFocusSessionOutcome({ sessionId: 'sess-1', durationMinutes: 25, sound: 'audio', outcome: 'yes' });
+const outcomeEvent = HypeAudio.listHypeEvents().find((e) => e.type === 'focus_session_outcome');
+assertEqual(outcomeEvent.sessionId, 'sess-1', 'logFocusSessionOutcome records sessionId');
+assertEqual(outcomeEvent.outcome, 'yes', 'logFocusSessionOutcome records outcome');
 
 // logHypeEvent pruning: hard cap on count, and future-dated/corrupt events
 // are dropped even though their (now - e.at) age-diff would pass the

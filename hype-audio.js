@@ -741,8 +741,9 @@
   // clipId+type+timestamp as the id (not a random uuid) -- gives mergeArrays
   // in sync.js a stable dedup key so the same real-world event logged on two
   // devices before they've synced doesn't get double-counted once it does.
-  function logHypeEvent(type, clip) {
+  function logHypeEvent(type, clip, extra) {
     try {
+      extra = extra || {};
       var now = Date.now();
       var events = listHypeEvents().filter(function (e) {
         return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
@@ -753,6 +754,35 @@
         clipId: clip.id,
         pillar: clip.pillar || null,
         mentality: clip.mentality || null,
+        useCase: extra.useCase || null,
+        deliveryRole: extra.deliveryRole || null,
+        sessionId: extra.sessionId || null,
+        at: now,
+        updated_at: now,
+      });
+      if (events.length > EVENT_MAX_COUNT) {
+        events = events.slice(events.length - EVENT_MAX_COUNT);
+      }
+      localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
+    } catch (e) {}
+  }
+
+  // No clip is associated with a focus-session outcome (especially Silence
+  // mode, or a Skip with nothing played) -- logged directly rather than
+  // forcing a fake clip through logHypeEvent's clip-shaped signature.
+  function logFocusSessionOutcome(data) {
+    try {
+      var now = Date.now();
+      var events = listHypeEvents().filter(function (e) {
+        return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
+      });
+      events.push({
+        id: 'focus_session_outcome|' + data.sessionId + '|' + now,
+        type: 'focus_session_outcome',
+        sessionId: data.sessionId,
+        durationMinutes: data.durationMinutes,
+        sound: data.sound,
+        outcome: data.outcome,
         at: now,
         updated_at: now,
       });
@@ -913,6 +943,8 @@
       explainQueuePick: explainQueuePick,
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
+      logHypeEvent: logHypeEvent,
+      logFocusSessionOutcome: logFocusSessionOutcome,
     };
     setupMediaSessionHandlers();
   }
@@ -956,6 +988,7 @@
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
       logHypeEvent: logHypeEvent,
+      logFocusSessionOutcome: logFocusSessionOutcome,
     };
   }
 })();

@@ -486,6 +486,27 @@ assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id
 HypeAudio.addClip({ id: 'rant4', title: 'Rant Test D', pillar: 'faith', mentality: 'grace', transcript_text: 'Not a carl clip.', play_count: 0 });
 assertEqual(HypeAudio.hasPendingContentIdea(HypeAudio.listClips().find(c => c.id === 'rant4')), false, 'a non-carl clip is never eligible, even with a transcript');
 
+// hasPendingMentalityReview / confirmMentality -- rant-capture flow: a
+// script-suggested mentality is never auto-applied, only surfaced for Carl
+// to confirm or override by hand.
+HypeAudio.addClip({ id: 'review1', title: 'Rant Review A', pillar: 'carl', mentality: '', suggested_mentality: 'discipline', play_count: 0 });
+assertEqual(HypeAudio.hasPendingMentalityReview(HypeAudio.listClips().find(c => c.id === 'review1')), true, 'a carl clip with a blank mentality and a suggestion is pending review');
+HypeAudio.addClip({ id: 'review2', title: 'Rant Review B', pillar: 'carl', mentality: '', play_count: 0 });
+assertEqual(HypeAudio.hasPendingMentalityReview(HypeAudio.listClips().find(c => c.id === 'review2')), false, 'a carl clip with no suggestion yet is not pending review');
+HypeAudio.addClip({ id: 'review3', title: 'Rant Review C', pillar: 'carl', mentality: 'carl', suggested_mentality: 'discipline', play_count: 0 });
+assertEqual(HypeAudio.hasPendingMentalityReview(HypeAudio.listClips().find(c => c.id === 'review3')), false, 'a clip that already has a hand-picked mentality is never pending review, even with a leftover suggestion');
+HypeAudio.addClip({ id: 'review4', title: 'Rant Review D', pillar: 'faith', mentality: '', suggested_mentality: 'grace', play_count: 0 });
+assertEqual(HypeAudio.hasPendingMentalityReview(HypeAudio.listClips().find(c => c.id === 'review4')), false, 'a non-carl clip is never pending review, even with a blank mentality and a suggestion');
+
+assertEqual(HypeAudio.confirmMentality('review1', 'discipline'), true, 'confirmMentality accepts a non-empty mentality and reports success');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'review1').mentality, 'discipline', 'confirmMentality sets the clip\'s real mentality field');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'review1').suggested_mentality, null, 'confirmMentality clears the suggestion once it\'s been hand-confirmed');
+assertEqual(HypeAudio.hasPendingMentalityReview(HypeAudio.listClips().find(c => c.id === 'review1')), false, 'a confirmed clip drops out of the pending-review queue');
+assertEqual(HypeAudio.confirmMentality('review2', '  Goggins  '), true, 'confirmMentality trims and normalizes an edited-by-hand value');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'review2').mentality, 'goggins', 'confirmMentality lowercases the confirmed mentality, matching every other mentality field');
+assertEqual(HypeAudio.confirmMentality('review3', '   '), false, 'confirmMentality refuses a blank/whitespace-only value and reports failure');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'review3').mentality, 'carl', 'a refused confirmMentality call leaves the clip\'s existing mentality untouched');
+
 // explainQueuePick -- state prioritization. Branch order must mirror
 // advance()'s own precedence (repeat > queue > randomFilter > favoritesFilter)
 // so the explanation never contradicts which pool actually produced the

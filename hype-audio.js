@@ -647,6 +647,29 @@
       clip.content_idea_sent !== true;
   }
 
+  // Rant-capture flow: the record form lets `mentality` be saved blank, and
+  // a local script (transcribe-carl-rants.py) fills in `suggested_mentality`
+  // from the transcript afterward -- a suggestion only, never written to the
+  // real `mentality` field itself. This predicate is what surfaces that
+  // suggestion for review; confirmMentality below is the only thing that
+  // ever turns a suggestion into a real, hand-confirmed mentality.
+  function hasPendingMentalityReview(clip) {
+    return !!clip && clip.pillar === 'carl' &&
+      (typeof clip.mentality !== 'string' || clip.mentality.trim().length === 0) &&
+      typeof clip.suggested_mentality === 'string' && clip.suggested_mentality.trim().length > 0;
+  }
+
+  // The only path from a suggestion to a real mentality -- always an
+  // explicit call with Carl's chosen value (accepting the suggestion as-is
+  // or editing it first), never automatic. Same trim+lowercase normalization
+  // the record form's Save handler already applies to a hand-typed mentality.
+  function confirmMentality(clipId, mentality) {
+    const normalized = (mentality || '').trim().toLowerCase();
+    if (!normalized) return false;
+    updateClip(clipId, { mentality: normalized, suggested_mentality: null });
+    return true;
+  }
+
   // ---- Item 13: workout-state queue explainer ----------------------------
 
   // Read-only snapshot of which mode is currently driving advance() -- the
@@ -939,6 +962,8 @@
       isOnCooldown: isOnCooldown,
       toggleDislikeCooldown: toggleDislikeCooldown,
       hasPendingContentIdea: hasPendingContentIdea,
+      hasPendingMentalityReview: hasPendingMentalityReview,
+      confirmMentality: confirmMentality,
       getPlaybackContext: getPlaybackContext,
       explainQueuePick: explainQueuePick,
       submitQueueFeedback: submitQueueFeedback,
@@ -982,6 +1007,8 @@
       isOnCooldown: isOnCooldown,
       toggleDislikeCooldown: toggleDislikeCooldown,
       hasPendingContentIdea: hasPendingContentIdea,
+      hasPendingMentalityReview: hasPendingMentalityReview,
+      confirmMentality: confirmMentality,
       uploadClipFile: uploadClipFile,
       getPlaybackContext: getPlaybackContext,
       explainQueuePick: explainQueuePick,

@@ -384,7 +384,7 @@
       </div>
       <form id="record-save-form" style="display:none">
         <div class="field"><label>Title</label><input type="text" id="record-title-input" placeholder="Title" required></div>
-        <div class="field"><label>Mentality</label><input type="text" id="record-mentality-input" placeholder="e.g. drive, discipline" required></div>
+        <div class="field"><label>Mentality</label><input type="text" id="record-mentality-input" placeholder="e.g. drive, discipline -- or leave blank, a suggestion appears once it's transcribed"></div>
         <select id="record-moment-input">
           <option value="pre_workout">Pre-workout</option>
           <option value="mid_set">Mid-set</option>
@@ -411,6 +411,7 @@
         </select>
         <button type="submit">Save</button>
       </form>
+      <div id="mentality-review-list"></div>
     </details>
 
     <div class="section-label">Library</div>
@@ -997,6 +998,64 @@
       renderTabbar();
     }
 
+    // Rant-capture flow: transcribe-carl-rants.py writes `suggested_mentality`
+    // onto carl clips saved with a blank `mentality` (see
+    // HypeAudio.hasPendingMentalityReview). Carl reviews the suggestion here
+    // and either accepts it or edits it before it becomes the real,
+    // hand-picked `mentality` -- confirmMentality is the only path that
+    // writes it, so a suggestion never gets auto-categorized.
+    function renderMentalityReview() {
+      const list = document.getElementById('mentality-review-list');
+      if (!list) return;
+      const pending = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingMentalityReview);
+      list.innerHTML = '';
+      if (!pending.length) return;
+      pending.forEach(function (clip) {
+        const row = document.createElement('div');
+        row.className = 'clip';
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'stretch';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'clip-title';
+        titleEl.textContent = clip.title;
+        row.appendChild(titleEl);
+
+        const preview = HypeAudio.quotePreview(clip, 120);
+        if (preview) {
+          const quoteEl = document.createElement('div');
+          quoteEl.className = 'clip-quote';
+          quoteEl.textContent = '"' + preview + '"';
+          row.appendChild(quoteEl);
+        }
+
+        const field = document.createElement('div');
+        field.className = 'field';
+        field.innerHTML = '<label>Suggested mentality: ' + escapeHtml(clip.suggested_mentality) + '</label>';
+        const mentalityInput = document.createElement('input');
+        mentalityInput.type = 'text';
+        mentalityInput.value = clip.suggested_mentality;
+        field.appendChild(mentalityInput);
+        row.appendChild(field);
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.textContent = 'Confirm mentality';
+        confirmBtn.style.marginTop = '10px';
+        confirmBtn.onclick = function () {
+          if (!HypeAudio.confirmMentality(clip.id, mentalityInput.value)) {
+            alert('Enter a mentality before confirming.');
+            return;
+          }
+          renderMentalityReview();
+          renderSection(currentPillar, currentMentality);
+        };
+        row.appendChild(confirmBtn);
+
+        list.appendChild(row);
+      });
+    }
+
     function renderSection(key, mentality) {
       const meta = PILLARS[key];
       document.getElementById('section-title').textContent = meta.label + ' · ' + mentalityLabel(mentality);
@@ -1005,7 +1064,10 @@
       document.getElementById('mentality-input').value = mentality;
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
       const recordDetails = document.getElementById('record-clip-details');
-      if (recordDetails) recordDetails.style.display = key === 'carl' ? '' : 'none';
+      if (recordDetails) {
+        recordDetails.style.display = key === 'carl' ? '' : 'none';
+        if (key === 'carl') renderMentalityReview();
+      }
 
       const randomBtn = document.getElementById('random-play');
       const randomActive = HypeAudio.isPlayingRandomFilter({ pillar: key, mentality: mentality });

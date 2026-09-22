@@ -5,10 +5,21 @@
 # mentality -- that exclusion is exactly the gap this script closes.
 # See docs/superpowers/specs/2026-08-17-rant-engine-design.md.
 #
+# Rant-capture flow (see index.html's record form + HypeAudio.confirmMentality):
+# the record form allows a blank `mentality` at save time. For any clip whose
+# transcript this script just filled in and whose `mentality` is still blank,
+# it also writes `suggested_mentality` -- a plain keyword-count guess against
+# the vocabulary of mentalities Carl has already used elsewhere in the
+# library. This is a suggestion only, same non-goal as the pillar
+# classification note above: no AI, no auto-categorization. Carl reviews and
+# confirms (or edits) it by hand in the app before it ever becomes the real
+# `mentality`.
+#
 # Push-back uses the plain anon/publishable key, not the service-role key --
 # app_state's RLS already grants anon read/write for key='hype-audio'
 # (confirmed live), matching hype-audio-app/scripts/update-existing-clips.js.
 import json
+import re
 import subprocess
 import tempfile
 import urllib.request
@@ -29,6 +40,23 @@ def fetch_json(url, headers):
         return json.loads(resp.read().decode("utf-8"))
 
 
+# Whole-word, case-insensitive count of each known mentality's own name
+# within the transcript -- deliberately simple (no NLP/embeddings/API calls),
+# matching this script's existing zero-cost, fully-local shape. Ties go to
+# whichever mentality was seen first in `known_mentalities` (a stable,
+# reproducible order, not a hidden random pick). Returns None rather than a
+# low-confidence guess when nothing in the transcript matches at all.
+def suggest_mentality(transcript, known_mentalities):
+    best, best_count = None, 0
+    for mentality in known_mentalities:
+        if not mentality:
+            continue
+        count = len(re.findall(r"\b" + re.escape(mentality) + r"\b", transcript, re.IGNORECASE))
+        if count > best_count:
+            best, best_count = mentality, count
+    return best
+
+
 def main():
     headers = {"apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY}
     row = fetch_json(
@@ -39,6 +67,16 @@ def main():
         print("No app_state row found for key=hype-audio.")
         return
     clips = row[0]["data"]["hype_audio"]
+
+    # The suggestion vocabulary: every mentality Carl has already hand-picked
+    # anywhere in the library (not just carl-pillar) -- a rant can reasonably
+    # reuse a mentality word from any other pillar (e.g. "discipline",
+    # "goggins"), and this is only ever a suggestion Carl confirms by hand.
+    known_mentalities = sorted({
+        (c.get("mentality") or "").strip().lower()
+        for c in clips
+        if not c.get("deleted") and (c.get("mentality") or "").strip()
+    })
 
     missing = [
         c for c in clips
@@ -86,6 +124,10 @@ def main():
 
             transcript = json.loads(out_json.read_text(encoding="utf-8"))["text"].strip()
             clip["transcript_text"] = transcript
+            if not (clip.get("mentality") or "").strip():
+                suggestion = suggest_mentality(transcript, known_mentalities)
+                if suggestion:
+                    clip["suggested_mentality"] = suggestion
             ok += 1
             if i % 5 == 0:
                 print(f"  [{i}/{len(missing)}] done")

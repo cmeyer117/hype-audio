@@ -12,8 +12,15 @@ const vm = require('vm');
 const source = fs.readFileSync(path.join(__dirname, 'sync.js'), 'utf8');
 
 function loadSandbox(fakeSupa) {
+  // sync.js reads window.SUPABASE_CONFIG at load (supabase-config.js in the
+  // browser) -- the sandbox has to provide it or the script throws before
+  // hypeFetchRowWorkoutDates is ever defined. Placeholder values only: the
+  // fake client below never touches the network.
   const sandbox = {
-    window: { supabase: { createClient: () => fakeSupa } },
+    window: {
+      supabase: { createClient: () => fakeSupa },
+      SUPABASE_CONFIG: { URL: 'https://selfcheck.invalid', KEY: 'selfcheck-key' },
+    },
     console,
     setTimeout,
     clearTimeout,

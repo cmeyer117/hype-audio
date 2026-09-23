@@ -22,6 +22,7 @@ import json
 import re
 import subprocess
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -30,8 +31,9 @@ SUPABASE_KEY = "sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv"
 APP_KEY = "hype-audio"
 
 HERE = Path(__file__).parent
+# Created in main(), not at import -- transcribe-carl-rants.selfcheck.py
+# imports this module for its pure functions and must not touch the disk.
 TRANSCRIPT_DIR = HERE / "carl-rant-transcripts"
-TRANSCRIPT_DIR.mkdir(exist_ok=True)
 
 
 def fetch_json(url, headers):
@@ -57,7 +59,25 @@ def suggest_mentality(transcript, known_mentalities):
     return best
 
 
+# The per-clip write, split out of main() so it's testable without Whisper
+# or the network. Bumps the clip's own `updated_at` (ms epoch, same unit
+# the app's Date.now() writes): sync.js's mergeArrays is last-write-wins
+# on that field per entry, so without the bump any device whose local copy
+# of this clip is newer -- a play_count increment or a favorite toggle is
+# enough -- would silently discard the transcript + suggestion on its next
+# merge and push the stale copy back over the top. Never writes the real
+# `mentality`; that stays the app's hand-confirmed step (confirmMentality).
+def apply_transcription(clip, transcript, known_mentalities, now_ms):
+    clip["transcript_text"] = transcript
+    if not (clip.get("mentality") or "").strip():
+        suggestion = suggest_mentality(transcript, known_mentalities)
+        if suggestion:
+            clip["suggested_mentality"] = suggestion
+    clip["updated_at"] = now_ms
+
+
 def main():
+    TRANSCRIPT_DIR.mkdir(exist_ok=True)
     headers = {"apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY}
     row = fetch_json(
         f"{SUPABASE_URL}/rest/v1/app_state?key=eq.{APP_KEY}&select=data",
@@ -123,11 +143,7 @@ def main():
                 continue
 
             transcript = json.loads(out_json.read_text(encoding="utf-8"))["text"].strip()
-            clip["transcript_text"] = transcript
-            if not (clip.get("mentality") or "").strip():
-                suggestion = suggest_mentality(transcript, known_mentalities)
-                if suggestion:
-                    clip["suggested_mentality"] = suggestion
+            apply_transcription(clip, transcript, known_mentalities, int(time.time() * 1000))
             ok += 1
             if i % 5 == 0:
                 print(f"  [{i}/{len(missing)}] done")

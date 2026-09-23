@@ -4,3 +4,4 @@ scripts/output/
 scripts/assets/
 .env*.local
 scripts/carl-rant-transcripts/
+__pycache__/

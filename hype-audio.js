@@ -53,6 +53,23 @@
     return listClips().filter((c) => !c.deleted);
   }
 
+  // The plain (non-stateMode) filter shape shared by pickRandom and
+  // pickFavoriteWeighted: pillar/mentality/moment/useCase/deliveryRole, each
+  // optional, pillar and deliveryRole as a string or an array of strings.
+  // One implementation so the two pickers can't drift -- the favorites copy
+  // used to silently ignore useCase/deliveryRole.
+  function clipFilterPredicate(filter) {
+    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
+    const deliveryRoles = Array.isArray(filter.deliveryRole) ? filter.deliveryRole : (filter.deliveryRole ? [filter.deliveryRole] : null);
+    return function (c) {
+      return (!filter.mentality || c.mentality === filter.mentality) &&
+        (!filter.moment || c.moment === filter.moment) &&
+        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
+        (!filter.useCase || c.use_case === filter.useCase) &&
+        (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1);
+    };
+  }
+
   function pickRandom(filter) {
     filter = filter || {};
     let pool;
@@ -68,15 +85,7 @@
         pool = [];
       }
     } else {
-      const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
-      const deliveryRoles = Array.isArray(filter.deliveryRole) ? filter.deliveryRole : (filter.deliveryRole ? [filter.deliveryRole] : null);
-      pool = listActiveClips().filter((c) =>
-        (!filter.mentality || c.mentality === filter.mentality) &&
-        (!filter.moment || c.moment === filter.moment) &&
-        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
-        (!filter.useCase || c.use_case === filter.useCase) &&
-        (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1)
-      );
+      pool = listActiveClips().filter(clipFilterPredicate(filter));
     }
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
@@ -298,15 +307,10 @@
   // Favorite-weighted pick: favorited clips are ~4x as likely to be
   // picked as non-favorited ones in the same filtered pool, but
   // non-favorited clips can still come up -- not an exclusive filter,
-  // a weighting. Mirrors pickRandom's filter shape (pillar/mentality/moment).
+  // a weighting. Same plain filter shape as pickRandom (clipFilterPredicate).
   function pickFavoriteWeighted(filter) {
     filter = filter || {};
-    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
-    const pool = listActiveClips().filter((c) =>
-      (!filter.mentality || c.mentality === filter.mentality) &&
-      (!filter.moment || c.moment === filter.moment) &&
-      (!pillars || pillars.indexOf(c.pillar) !== -1)
-    );
+    const pool = listActiveClips().filter(clipFilterPredicate(filter));
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
     const weighted = [];
@@ -761,17 +765,33 @@
     catch (e) { return []; }
   }
 
-  // clipId+type+timestamp as the id (not a random uuid) -- gives mergeArrays
-  // in sync.js a stable dedup key so the same real-world event logged on two
-  // devices before they've synced doesn't get double-counted once it does.
-  function logHypeEvent(type, clip, extra) {
+  // The one write path for the event log: prune by age (dropping corrupt or
+  // future-dated entries, whose age-diff would otherwise pass), append,
+  // enforce the hard cap, persist. `build(now)` returns the entry so both
+  // loggers below share the exact same pruning rules instead of two copies
+  // that could drift. Swallows storage errors -- a logging failure must
+  // never throw back into the playback/click path that triggered it.
+  function appendHypeEvent(build) {
     try {
-      extra = extra || {};
       var now = Date.now();
       var events = listHypeEvents().filter(function (e) {
         return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
       });
-      events.push({
+      events.push(Object.assign(build(now), { at: now, updated_at: now }));
+      if (events.length > EVENT_MAX_COUNT) {
+        events = events.slice(events.length - EVENT_MAX_COUNT);
+      }
+      localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
+    } catch (e) {}
+  }
+
+  // clipId+type+timestamp as the id (not a random uuid) -- gives mergeArrays
+  // in sync.js a stable dedup key so the same real-world event logged on two
+  // devices before they've synced doesn't get double-counted once it does.
+  function logHypeEvent(type, clip, extra) {
+    extra = extra || {};
+    appendHypeEvent(function (now) {
+      return {
         id: clip.id + '|' + type + '|' + now,
         type: type,
         clipId: clip.id,
@@ -780,40 +800,24 @@
         useCase: extra.useCase || null,
         deliveryRole: extra.deliveryRole || null,
         sessionId: extra.sessionId || null,
-        at: now,
-        updated_at: now,
-      });
-      if (events.length > EVENT_MAX_COUNT) {
-        events = events.slice(events.length - EVENT_MAX_COUNT);
-      }
-      localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
-    } catch (e) {}
+      };
+    });
   }
 
   // No clip is associated with a focus-session outcome (especially Silence
   // mode, or a Skip with nothing played) -- logged directly rather than
   // forcing a fake clip through logHypeEvent's clip-shaped signature.
   function logFocusSessionOutcome(data) {
-    try {
-      var now = Date.now();
-      var events = listHypeEvents().filter(function (e) {
-        return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
-      });
-      events.push({
+    appendHypeEvent(function (now) {
+      return {
         id: 'focus_session_outcome|' + data.sessionId + '|' + now,
         type: 'focus_session_outcome',
         sessionId: data.sessionId,
         durationMinutes: data.durationMinutes,
         sound: data.sound,
         outcome: data.outcome,
-        at: now,
-        updated_at: now,
-      });
-      if (events.length > EVENT_MAX_COUNT) {
-        events = events.slice(events.length - EVENT_MAX_COUNT);
-      }
-      localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
-    } catch (e) {}
+      };
+    });
   }
 
   var UPLOAD_SECRET_KEY = 'hype_audio_upload_secret';

@@ -535,7 +535,12 @@
     let currentPillar = null;   // null = home, else a pillar key
     let currentMentality = null; // null = subcat screen, else inside a mentality's clip list
 
-    function mentalityLabel(m) { return m.charAt(0).toUpperCase() + m.slice(1); }
+    // A blank mentality is a real state now (rant-capture: the record form
+    // lets Carl save first and confirm a suggested mentality later), so it
+    // needs a readable name -- otherwise it rendered as a nameless subcat
+    // tile and a "Carl · " section title.
+    const UNTAGGED_LABEL = 'Untagged';
+    function mentalityLabel(m) { return m ? m.charAt(0).toUpperCase() + m.slice(1) : UNTAGGED_LABEL; }
     function mentalityArt(m) { return 'images/clips/' + (Object.hasOwn(CLIP_ART_MANIFEST, m) ? CLIP_ART_MANIFEST[m] : CLIP_ART_MANIFEST.default); }
     HypeAudio.setArtworkResolver(mentalityArt);
 
@@ -1112,7 +1117,7 @@
         titleEl.textContent = clip.title;
         const metaEl = document.createElement('div');
         metaEl.className = 'clip-meta';
-        metaEl.textContent = clip.mentality + ' · ' + clip.moment;
+        metaEl.textContent = (clip.mentality || UNTAGGED_LABEL.toLowerCase()) + ' · ' + clip.moment;
         info.appendChild(titleEl);
         info.appendChild(metaEl);
         const preview = HypeAudio.quotePreview(clip, 80);

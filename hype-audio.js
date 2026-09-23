@@ -53,6 +53,23 @@
     return listClips().filter((c) => !c.deleted);
   }
 
+  // The plain (non-stateMode) filter shape shared by pickRandom and
+  // pickFavoriteWeighted: pillar/mentality/moment/useCase/deliveryRole, each
+  // optional, pillar and deliveryRole as a string or an array of strings.
+  // One implementation so the two pickers can't drift -- the favorites copy
+  // used to silently ignore useCase/deliveryRole.
+  function clipFilterPredicate(filter) {
+    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
+    const deliveryRoles = Array.isArray(filter.deliveryRole) ? filter.deliveryRole : (filter.deliveryRole ? [filter.deliveryRole] : null);
+    return function (c) {
+      return (!filter.mentality || c.mentality === filter.mentality) &&
+        (!filter.moment || c.moment === filter.moment) &&
+        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
+        (!filter.useCase || c.use_case === filter.useCase) &&
+        (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1);
+    };
+  }
+
   function pickRandom(filter) {
     filter = filter || {};
     let pool;
@@ -68,15 +85,7 @@
         pool = [];
       }
     } else {
-      const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
-      const deliveryRoles = Array.isArray(filter.deliveryRole) ? filter.deliveryRole : (filter.deliveryRole ? [filter.deliveryRole] : null);
-      pool = listActiveClips().filter((c) =>
-        (!filter.mentality || c.mentality === filter.mentality) &&
-        (!filter.moment || c.moment === filter.moment) &&
-        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
-        (!filter.useCase || c.use_case === filter.useCase) &&
-        (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1)
-      );
+      pool = listActiveClips().filter(clipFilterPredicate(filter));
     }
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
@@ -298,15 +307,10 @@
   // Favorite-weighted pick: favorited clips are ~4x as likely to be
   // picked as non-favorited ones in the same filtered pool, but
   // non-favorited clips can still come up -- not an exclusive filter,
-  // a weighting. Mirrors pickRandom's filter shape (pillar/mentality/moment).
+  // a weighting. Same plain filter shape as pickRandom (clipFilterPredicate).
   function pickFavoriteWeighted(filter) {
     filter = filter || {};
-    const pillars = Array.isArray(filter.pillar) ? filter.pillar : (filter.pillar ? [filter.pillar] : null);
-    const pool = listActiveClips().filter((c) =>
-      (!filter.mentality || c.mentality === filter.mentality) &&
-      (!filter.moment || c.moment === filter.moment) &&
-      (!pillars || pillars.indexOf(c.pillar) !== -1)
-    );
+    const pool = listActiveClips().filter(clipFilterPredicate(filter));
     if (pool.length === 0) return null;
     const eligible = filterEligiblePool(pool);
     const weighted = [];

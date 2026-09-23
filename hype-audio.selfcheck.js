@@ -54,6 +54,12 @@ HypeAudio.addClip({ id: 'cue1', title: 'Brace cue', mentality: 'brace', pillar: 
 assertEqual(HypeAudio.pickRandom({ mentality: 'brace', deliveryRole: ['instructional_cue'] }).id, 'cue1', 'pickRandom(mentality+deliveryRole) finds the matching cue clip');
 assertEqual(HypeAudio.pickRandom({ mentality: 'brace', deliveryRole: ['motivational_speech'] }), null, 'pickRandom(mentality+deliveryRole) excludes a mentality match with the wrong delivery_role');
 
+// pickFavoriteWeighted shares the exact same filter shape -- it must honor
+// useCase/deliveryRole too, not just pillar/mentality/moment.
+assertEqual(HypeAudio.pickFavoriteWeighted({ mentality: 'brace', deliveryRole: ['motivational_speech'] }), null, 'pickFavoriteWeighted(mentality+deliveryRole) excludes a mentality match with the wrong delivery_role');
+assertEqual(HypeAudio.pickFavoriteWeighted({ useCase: 'study_focus', deliveryRole: ['noise'] }).id, 'focus1', 'pickFavoriteWeighted(useCase+deliveryRole) narrows to the matching clip');
+assertEqual(HypeAudio.pickFavoriteWeighted({ useCase: 'nonexistent-use-case' }), null, 'pickFavoriteWeighted(useCase) returns null when nothing matches');
+
 // deleteClip is a soft-delete (tombstone) — the whole reason is so a cloud-sync
 // merge from another device/tab can't silently un-delete a clip (mergeArrays
 // in sync.js can't tell "never synced" from "deleted" once an entry is just gone).

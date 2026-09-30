@@ -88,4 +88,48 @@ assertEqual(computeSyncStatus({ initFailed: true, pushInFlight: true, retrying: 
   assertEqual(computeSyncStatus(statusState), 'synced', 'a successful flushOnUnload after a failed push clears retrying');
 }
 
+// --- permanent permission failure gets its own visible state (2026-09-30) ---
+// Writes to app_state key 'hype-audio' were RLS-denied for 8+ days after the
+// 2026-09-22 anon-policy tightening and the indicator only ever said
+// "Retrying...", which reads as transient. A permission denial is never fixed by
+// retrying, so it must surface as 'blocked'.
+const permMatch = src.match(/function isPermissionError\([\s\S]*?\n {4}\}/);
+if (!permMatch) { console.error('sync.selfcheck.js: isPermissionError not found in sync.js'); process.exit(1); }
+const isPermissionError = new Function('return (' + permMatch[0].replace('function isPermissionError', 'function') + ')')();
+
+assertEqual(computeSyncStatus({ initFailed: false, pushInFlight: false, retrying: true, blocked: true }), 'blocked', 'a permission-denied push shows blocked, not retrying');
+assertEqual(computeSyncStatus({ initFailed: false, pushInFlight: true, retrying: true, blocked: true }), 'saving', 'an attempt in flight still shows saving');
+assertEqual(computeSyncStatus({ initFailed: true, pushInFlight: false, retrying: false, blocked: true }), 'offline', 'initFailed still wins over blocked');
+
+for (const [err, expected, label] of [
+  [{ code: '42501', message: 'new row violates row-level security policy for table "app_state"' }, true, 'Postgres RLS violation code 42501'],
+  [{ message: 'new row violates row-level security policy' }, true, 'RLS message without a code'],
+  [{ status: 401 }, true, 'HTTP 401'],
+  [{ status: 403 }, true, 'HTTP 403'],
+  [{ message: 'JWT expired' }, true, 'expired token'],
+  [{ message: 'Invalid API key' }, true, 'revoked/invalid API key message'],
+  [{ message: 'Failed to fetch' }, false, 'a network failure is transient, not a permission problem'],
+  [{ status: 500, message: 'internal error' }, false, 'a server error is transient'],
+  [null, false, 'no error'],
+]) {
+  assertEqual(isPermissionError(err), expected, `isPermissionError: ${label}`);
+}
+
+// supabase-js v2 puts the HTTP status on the RESULT object next to `error`, not on the
+// error (Codex review 2026-09-30): a bare-message error with a 401/403 status must be blocked.
+assertEqual(isPermissionError({ message: 'oops' }, 401), true, 'a 401 response status marks blocked even when the error has no status');
+assertEqual(isPermissionError({ message: 'oops' }, 403), true, 'a 403 response status marks blocked');
+assertEqual(isPermissionError({ message: 'oops' }, 500), false, 'a 500 response status is transient');
+assertEqual(isPermissionError({ message: 'oops' }, undefined), false, 'no status and a non-permission message is transient');
+
+// A later successful background flush clears blocked too (e.g. once access is restored).
+{
+  const statusState = { initFailed: false, pushInFlight: false, retrying: true, blocked: true };
+  runFlushSuccess('{"a":1}', statusState, () => {});
+  assertEqual(computeSyncStatus(statusState), 'synced', 'a successful flush clears blocked');
+}
+
+// The unload-flush path (raw fetch) must also flag a 401/403 instead of dropping it silently.
+assertEqual(/else if \(resp\.status === 401 \|\| resp\.status === 403\) \{ statusState\.blocked = true;/.test(src), true, 'flushOnUnload marks a 401/403 response as blocked');
+
 console.log('sync.selfcheck.js: all assertions passed');

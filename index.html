@@ -521,7 +521,9 @@
       onStatusChange: function (status, lastSyncedAt) {
         const el = document.getElementById('sync-status-indicator');
         if (!el) return;
-        const labels = { synced: 'Synced', saving: 'Saving…', retrying: 'Retrying…', offline: 'Offline' };
+        const labels = { synced: 'Synced', saving: 'Saving…', retrying: 'Retrying…', offline: 'Offline', blocked: 'Not saving to the cloud — access denied. Changes are only on this device.' };
+        // Red only for the permanent-failure state; everything else keeps the normal colour.
+        el.style.color = status === 'blocked' ? '#f87171' : 'var(--text-secondary)';
         let text = labels[status] || status;
         if (status === 'synced' && lastSyncedAt) {
           const secs = Math.max(0, Math.round((Date.now() - lastSyncedAt) / 1000));

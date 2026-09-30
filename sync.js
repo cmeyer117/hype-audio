@@ -150,10 +150,24 @@
     function computeSyncStatus(s) {
       if (s.initFailed) return 'offline';
       if (s.pushInFlight) return 'saving';
+      if (s.blocked) return 'blocked';
       if (s.retrying) return 'retrying';
       return 'synced';
     }
-    const statusState = { initFailed: false, pushInFlight: false, retrying: false };
+    // A permission denial (Postgres RLS 42501, HTTP 401/403) never fixes itself by
+    // retrying, so it gets its own visible state instead of "Retrying..." forever.
+    // Found 2026-09-30: writes to app_state key 'hype-audio' have been RLS-denied since
+    // the 2026-09-22 anon-policy tightening, and nothing on screen said so.
+    // `status` is the HTTP status of the response: in supabase-js v2 it sits NEXT TO `error`
+    // in the result object ({ data, error, status }), not on the error itself, so a revoked
+    // key's 401 is only visible there.
+    function isPermissionError(e, status) {
+      if (!e) return false;
+      if (status === 401 || status === 403) return true;
+      if (e.code === '42501' || e.status === 401 || e.status === 403) return true;
+      return /row-level security|permission denied|not authorized|jwt|invalid api key/i.test(String(e.message || ''));
+    }
+    const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false };
     let lastSyncedAt = null;
     const onStatusChange = config && config.onStatusChange;
     function updateStatus() {
@@ -179,9 +193,9 @@
       // Supabase, no console output, until the real exception surfaced).
       // try/catch around a proper await is the safe pattern for these
       // builders.
-      let error;
+      let error, status;
       try {
-        ({ error } = await supa.from('app_state').upsert(
+        ({ error, status } = await supa.from('app_state').upsert(
           { key: appKey, data: state, updated_at: new Date().toISOString() },
           { onConflict: 'key' }
         ));
@@ -193,9 +207,11 @@
         lastSyncedJson = json;
         lastSyncedAt = Date.now();
         statusState.retrying = false;
+        statusState.blocked = false;
         updateStatus();
         return;
       }
+      statusState.blocked = isPermissionError(error, status);
       statusState.retrying = true;
       updateStatus();
       // Route the retry/fallback timer through pushTimer (not a bare
@@ -246,7 +262,7 @@
           },
           body: JSON.stringify({ key: appKey, data: state, updated_at: new Date().toISOString() }),
           keepalive: true,
-        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     (async function init() {

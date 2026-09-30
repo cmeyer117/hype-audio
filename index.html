@@ -1100,7 +1100,7 @@
       list.innerHTML = '';
       const clips = HypeAudio.listActiveClips().filter(function (c) { return c.pillar === key && c.mentality === mentality; });
       if (!clips.length) {
-        list.innerHTML = '<div class="empty-state">No ' + mentalityLabel(mentality).toLowerCase() + ' clips yet — upload one above.</div>';
+        list.innerHTML = '<div class="empty-state">No ' + escapeHtml(mentalityLabel(mentality).toLowerCase()) + ' clips yet — upload one above.</div>';
         return;
       }
       clips.forEach(function (clip) {
@@ -1508,7 +1508,11 @@
       resultsEl.innerHTML = results.length
         ? results.map(function (c) {
             const preview = window.HypeAudio.quotePreview(c, 100);
-            return '<div class="clip search-result" data-clip-id="' + c.id + '">' +
+            // c.id comes from the synced row (which anyone holding the public key can write --
+            // audit P0-1), so it MUST be escaped in this attribute context: an id like
+            // x"><img onerror=...> was an XSS sink that could exfiltrate the upload passphrase
+            // kept in localStorage (audit P1-1). row.dataset.clipId below reads the original back.
+            return '<div class="clip search-result" data-clip-id="' + escapeHtml(c.id) + '">' +
               '<div class="clip-info">' +
                 '<div class="clip-title">' + escapeHtml(c.title) + '</div>' +
                 '<div class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</div>' +

@@ -9,7 +9,14 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv';
+// Owner-only RLS since 2026-09-30: the anon key can no longer read or write the hype-audio row
+// (or write storage). Run with the service role, e.g. from PowerShell:
+//   $env:SUPABASE_SERVICE_ROLE_KEY = (Select-String '^SUPABASE_SERVICE_ROLE_KEY=' C:\Users\gregm\jarvis-embed\.env).Line.Split('=',2)[1]
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SUPABASE_KEY) {
+  console.error('Set SUPABASE_SERVICE_ROLE_KEY (see C:\\Users\\gregm\\jarvis-embed\\.env): the anon key can no longer read or write the hype-audio row.');
+  process.exit(1);
+}
 const APP_KEY = 'hype-audio';
 
 async function main() {

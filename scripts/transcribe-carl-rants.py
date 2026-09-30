@@ -15,19 +15,22 @@
 # confirms (or edits) it by hand in the app before it ever becomes the real
 # `mentality`.
 #
-# Push-back uses the plain anon/publishable key, not the service-role key --
-# app_state's RLS already grants anon read/write for key='hype-audio'
-# (confirmed live), matching hype-audio-app/scripts/update-existing-clips.js.
+# Reads and pushes back with the SERVICE-ROLE key from the environment. Until 2026-09-30
+# this used the public anon key (app_state RLS granted anon access to key='hype-audio');
+# that row is now owner-only, so the anon key can neither read nor write it.
+#   $env:SUPABASE_SERVICE_ROLE_KEY = (Select-String '^SUPABASE_SERVICE_ROLE_KEY=' C:\Users\gregm\jarvis-embed\.env).Line.Split('=',2)[1]
 import json
+import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
 from pathlib import Path
 
 SUPABASE_URL = "https://vikpcejlyxieguorwysf.supabase.co"
-SUPABASE_KEY = "sb_publishable_EvWPtfW1FBW5Vf-H6w0yHw_PcXK4imv"
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 APP_KEY = "hype-audio"
 
 HERE = Path(__file__).parent
@@ -77,6 +80,8 @@ def apply_transcription(clip, transcript, known_mentalities, now_ms):
 
 
 def main():
+    if not SUPABASE_KEY:
+        sys.exit("Set SUPABASE_SERVICE_ROLE_KEY (see C:\\Users\\gregm\\jarvis-embed\\.env): the anon key can no longer read or write the hype-audio row.")
     TRANSCRIPT_DIR.mkdir(exist_ok=True)
     headers = {"apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY}
     row = fetch_json(

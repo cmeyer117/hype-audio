@@ -297,37 +297,36 @@
     window.addEventListener('storage', (e) => { if (e.key && matches(e.key)) schedulePush(); });
   };
 
-  // weekly-recap.js's optional workoutDates input only ever needs the set of
-  // training-day dates out of Row's po-coach app_state row, not the full
-  // workout payload. Postgrest's JSON path operator narrows that
-  // server-side (data->po_coach_v1->sessions) instead of shipping Row's
-  // whole cross-app blob just to read its keys -- same least-privilege
-  // pattern as Vessel's vesselFetchRowWorkoutDates() (vessel/vessel-sync.js).
-  window.hypeFetchRowWorkoutDates = async function () {
-    if (!window.supabase) return new Set();
-    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    // Codex review 2026-08-21: a stalled (not rejected) request used to hang
-    // renderWeeklyRecap() indefinitely -- a timeout degrades to the same
-    // empty-state fallback a real "no data" response already produces.
-    const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000));
-    const { data } = await Promise.race([
-      supa.from('app_state').select('sessions:data->po_coach_v1->sessions').eq('key', 'po-coach').maybeSingle(),
-      timeout,
-    ]);
-    return new Set(Object.keys(data?.sessions ?? {}));
-  };
-
-  // Item 4.3 (phase-aware clip selection) only needs Row's current season
-  // phase name (e.g. 'peak'), not startDate or the rest of po_coach_season --
-  // same least-privilege JSON-path narrowing as hypeFetchRowWorkoutDates above.
-  window.hypeFetchRowPhase = async function () {
+  // Row's po-coach app_state row holds logs, weights and pain check-ins, so its
+  // public anon SELECT policy is being retired (plan: Claude Outputs/
+  // 2026-09-30-row-rls-plan.md). This app has no login, so it reads the only
+  // two things it needs -- training-day dates and the season phase name --
+  // through get_row_training_signals(), a security-definer RPC that returns
+  // just { session_dates: [...], phase } and nothing else from that row.
+  // Codex review 2026-08-21: a stalled (not rejected) request used to hang
+  // renderWeeklyRecap() indefinitely -- the timeout degrades to the same
+  // empty-state fallback a real "no data" response already produces.
+  async function fetchRowTrainingSignals() {
     if (!window.supabase) return null;
     const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000));
-    const { data } = await Promise.race([
-      supa.from('app_state').select('phase:data->po_coach_season->phase').eq('key', 'po-coach').maybeSingle(),
-      timeout,
-    ]);
-    return data?.phase ?? null;
+    try {
+      const { data } = await Promise.race([supa.rpc('get_row_training_signals'), timeout]);
+      return data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // weekly-recap.js's optional workoutDates input: the set of training-day dates.
+  window.hypeFetchRowWorkoutDates = async function () {
+    const signals = await fetchRowTrainingSignals();
+    return new Set(Array.isArray(signals?.session_dates) ? signals.session_dates : []);
+  };
+
+  // Item 4.3 (phase-aware clip selection): Row's current season phase name (e.g. 'peak').
+  window.hypeFetchRowPhase = async function () {
+    const signals = await fetchRowTrainingSignals();
+    return signals?.phase ?? null;
   };
 })();

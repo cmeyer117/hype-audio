@@ -149,6 +149,7 @@
     // and nextRetryDelayMs are (see sync.selfcheck.js).
     function computeSyncStatus(s) {
       if (s.initFailed) return 'offline';
+      if (s.signedOut) return 'signedout';
       if (s.pushInFlight) return 'saving';
       if (s.blocked) return 'blocked';
       if (s.retrying) return 'retrying';
@@ -167,7 +168,7 @@
       if (e.code === '42501' || e.status === 401 || e.status === 403) return true;
       return /row-level security|permission denied|not authorized|jwt|invalid api key/i.test(String(e.message || ''));
     }
-    const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false };
+    const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false, signedOut: false };
     let lastSyncedAt = null;
     const onStatusChange = config && config.onStatusChange;
     function updateStatus() {
@@ -234,6 +235,12 @@
     let lastFlushAt = 0;
     function flushOnUnload() {
       if (!syncReady) return;
+      // With hype-auth.js loaded the bearer MUST be the owner's session token; a missing one
+      // means "not signed in right now", so decline to flush rather than fall back to the
+      // anon key (an explicitly forbidden anonymous write). Legacy copies without hype-auth.js
+      // keep the anon key. (Codex review 2026-09-30.)
+      const bearer = window.HypeAuth ? window.HypeAuth.accessToken() : SUPABASE_KEY;
+      if (!bearer) return;
       const now = Date.now();
       if (now - lastFlushAt < 1000) return;
       lastFlushAt = now;
@@ -256,7 +263,9 @@
           method: 'POST',
           headers: {
             'apikey': SUPABASE_KEY,
-            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            // The owner's session token (kept current by hype-auth.js; sync, because a page
+            // teardown can't await), not the anon key -- the anon role can't write this row.
+            'Authorization': 'Bearer ' + bearer,
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates',
           },
@@ -265,10 +274,29 @@
         }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
-    (async function init() {
-      supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    let channelSubscribed = false;
+    // Bumped by every init() and by sign-out: an init whose generation is stale (a sign-out or a
+    // newer init happened while it awaited) must not flip syncReady back on or apply remote data
+    // (Codex review 2026-09-30: a sign-out during the initial SELECT was being undone).
+    let initGen = 0;
+    async function init() {
+      const myGen = ++initGen;
+      // ONE shared client (hype-auth.js's) so there is a single GoTrue instance on the page;
+      // without hype-auth.js (older copies of this file) it behaves exactly as before.
+      supa = (window.HypeAuth && window.HypeAuth.getClient()) || window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      // The anon role can no longer read or write this row (owner-only RLS), so cloud sync
+      // needs the owner session. Signed out = local-only + a tappable "Sign in to sync";
+      // 'unknown' = could not reach the auth server (offline), handled like a failed init.
+      if (window.HypeAuth) {
+        const auth = await window.HypeAuth.status();
+        if (myGen !== initGen) return;
+        if (auth === 'signedout') { statusState.signedOut = true; updateStatus(); return; }
+        if (auth === 'unknown') { statusState.initFailed = true; updateStatus(); return; }
+      }
+      statusState.signedOut = false;
       try {
         const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
+        if (myGen !== initGen) return;   // signed out (or superseded) while the read was in flight
         if (!error) {
           syncReady = true;
           if (data && data.data && Object.keys(data.data).length > 0) {
@@ -287,18 +315,30 @@
         statusState.initFailed = true;
         updateStatus();
       }
-      supa.channel('app_state_' + appKey)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,
-        }, (payload) => {
-          if (!payload.new || !payload.new.data) return;
-          const incoming = JSON.stringify(payload.new.data);
-          if (incoming === lastSyncedJson) return;
-          lastSyncedJson = incoming;
-          applyRemote(payload.new.data);
-        })
-        .subscribe();
-    })();
+      if (!channelSubscribed) {
+        channelSubscribed = true;
+        supa.channel('app_state_' + appKey)
+          .on('postgres_changes', {
+            event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,
+          }, (payload) => {
+            if (!payload.new || !payload.new.data) return;
+            const incoming = JSON.stringify(payload.new.data);
+            if (incoming === lastSyncedJson) return;
+            lastSyncedJson = incoming;
+            applyRemote(payload.new.data);
+          })
+          .subscribe();
+      }
+    }
+    init();
+    // Signing in later (the "Sign in to sync" prompt) starts sync without a reload;
+    // signing out stops pushes immediately.
+    if (window.HypeAuth) {
+      window.HypeAuth.onChange((session) => {
+        if (session && !syncReady) { statusState.initFailed = false; init(); }
+        else if (!session) { initGen++; syncReady = false; statusState.signedOut = true; updateStatus(); }
+      });
+    }
     window.addEventListener('beforeunload', flushOnUnload);
     window.addEventListener('pagehide', flushOnUnload);
     // beforeunload/pagehide are unreliable on mobile Safari/PWAs for the
@@ -324,7 +364,8 @@
   // empty-state fallback a real "no data" response already produces.
   async function fetchRowTrainingSignals() {
     if (!window.supabase) return null;
-    const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // The shared client when hype-auth.js is loaded (one GoTrue instance per page).
+    const supa = (window.HypeAuth && window.HypeAuth.getClient()) || window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null }), 3000));
     try {
       const { data } = await Promise.race([supa.rpc('get_row_training_signals'), timeout]);

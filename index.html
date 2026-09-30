@@ -463,7 +463,8 @@
 
   <script src="supabase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="sync.js"></script>
+  <script src="hype-auth.js"></script>
+<script src="sync.js"></script>
   <script src="hype-audio.js"></script>
   <script src="weekly-recap.js"></script>
   <script>
@@ -521,9 +522,14 @@
       onStatusChange: function (status, lastSyncedAt) {
         const el = document.getElementById('sync-status-indicator');
         if (!el) return;
-        const labels = { synced: 'Synced', saving: 'Saving…', retrying: 'Retrying…', offline: 'Offline', blocked: 'Not saving to the cloud — access denied. Changes are only on this device.' };
+        const labels = { synced: 'Synced', saving: 'Saving…', retrying: 'Retrying…', offline: 'Offline', blocked: 'Not saving to the cloud — access denied. Changes are only on this device.', signedout: 'Local only — tap to sign in and sync' };
         // Red only for the permanent-failure state; everything else keeps the normal colour.
         el.style.color = status === 'blocked' ? '#f87171' : 'var(--text-secondary)';
+        // Signed out: the indicator becomes the sign-in button (playback never waits on this).
+        const tappable = status === 'signedout' && window.HypeAuth;
+        el.onclick = tappable ? function () { window.HypeAuth.showLogin(); } : null;
+        el.style.cursor = tappable ? 'pointer' : '';
+        el.style.textDecoration = tappable ? 'underline' : '';
         let text = labels[status] || status;
         if (status === 'synced' && lastSyncedAt) {
           const secs = Math.max(0, Math.round((Date.now() - lastSyncedAt) / 1000));

@@ -223,6 +223,7 @@
   // one ends, looping until stopped. Starting either cancels the other.
   let queue = null;
   let randomFilter = null;
+  let randomEventContext = null;
   let repeatClip = null;
 
   // 1-day cooldown, set explicitly via toggleDislikeCooldown -- see
@@ -424,7 +425,7 @@
   // Internal: plays exactly one clip and wires its natural end to advance()
   // -- the only thing that knows about queue/randomFilter. A user pause
   // never advances (onpause isn't wired to it), only a clip actually ending.
-  function playSingle(clip) {
+  function playSingle(clip, eventContext) {
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
@@ -452,7 +453,7 @@
         // (repeat mode reuses one object forever, so counts never accumulated).
         const fresh = listClips().find(function (c) { return c.id === clip.id; });
         updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 });
-        logHypeEvent('play', clip);
+        logHypeEvent('play', clip, eventContext);
         recentlyPlayed.push(clip.id);
         if (recentlyPlayed.length > RECENT_WINDOW) recentlyPlayed.shift();
       }
@@ -494,7 +495,7 @@
       queue = null;
     } else if (randomFilter) {
       const next = pickRandom(randomFilter);
-      if (next) { playSingle(next); return; }
+      if (next) { playSingle(next, randomEventContext); return; }
       randomFilter = null;
     } else if (favoritesFilter) {
       const next = pickFavoriteWeighted(favoritesFilter);
@@ -510,14 +511,16 @@
   // earlier-session streak could false-stop it on the first error; an
   // earlier-session recentlyPlayed could suppress clips in a pool that
   // never actually played anything yet).
-  function playClip(clip) {
+  function playClip(clip, eventContext) {
     queue = null;
     randomFilter = null;
+    randomEventContext = null;
+    randomEventContext = null;
     repeatClip = null;
     favoritesFilter = null;
     errorStreak = 0;
     recentlyPlayed = [];
-    return playSingle(clip);
+    return playSingle(clip, eventContext);
   }
 
   // Repeats one clip over and over until stopPlayback() or a different
@@ -525,6 +528,7 @@
   function playRepeat(clip) {
     queue = null;
     randomFilter = null;
+    randomEventContext = null;
     repeatClip = clip;
     favoritesFilter = null;
     errorStreak = 0;
@@ -539,6 +543,7 @@
     const idx = clips.findIndex(function (c) { return c.id === clipId; });
     if (idx === -1) return null;
     randomFilter = null;
+    randomEventContext = null;
     repeatClip = null;
     favoritesFilter = null;
     errorStreak = 0;
@@ -550,21 +555,23 @@
   // Starts (or restarts) an endless random loop within `filter` -- a new
   // random pick plays every time the previous one ends, until stopPlayback()
   // or a different clip is explicitly chosen.
-  function playRandomLoop(filter) {
+  function playRandomLoop(filter, eventContext) {
     queue = null;
     repeatClip = null;
     favoritesFilter = null;
+    randomEventContext = eventContext || null;
     errorStreak = 0;
     recentlyPlayed = [];
     const clip = pickRandom(filter);
     if (!clip) { randomFilter = null; return null; }
     randomFilter = filter || {};
-    return playSingle(clip);
+    return playSingle(clip, randomEventContext);
   }
 
   function stopPlayback() {
     queue = null;
     randomFilter = null;
+    randomEventContext = null;
     repeatClip = null;
     favoritesFilter = null;
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }

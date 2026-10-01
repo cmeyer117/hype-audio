@@ -25,9 +25,8 @@ async function main() {
   console.log(`${targets.length} of ${IDS.size} target ids found in manifest.`);
 
   const supa = createClient(SUPABASE_URL, SUPABASE_KEY);
-  await supa.auth.signInAnonymously();
-
-  const { data: row } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
+  const { data: row, error: readError } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
+  if (readError || !Array.isArray(row?.data?.hype_audio)) throw new Error('Could not read the existing hype library; refusing to modify it.');
   const clips = row.data.hype_audio;
 
   const toDelete = [];
@@ -60,7 +59,7 @@ async function main() {
   }
 
   const { error: writeErr } = await supa.from('app_state').upsert(
-    { key: APP_KEY, data: { hype_audio: clips }, updated_at: new Date().toISOString() },
+    { key: APP_KEY, data: { ...row.data, hype_audio: clips }, updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
   if (writeErr) { console.error('app_state write failed:', writeErr.message); process.exit(1); }

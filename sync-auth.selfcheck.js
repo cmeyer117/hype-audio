@@ -20,6 +20,7 @@ function build(initialAuth, opts) {
   const store = { hype_audio: JSON.stringify([{ id: 'c1', title: 'a clip', updated_at: 1 }]) };
   const cloud = { selects: 0, upserts: 0, channels: 0 };
   const fetches = [];
+  const events = {};
   const doc = { visibilityState: 'visible', handler: null, addEventListener(evt, cb) { if (evt === 'visibilitychange') this.handler = cb; } };
   let authState = initialAuth;                 // 'owner' | 'signedout' | 'unknown'
   let token = null;
@@ -29,7 +30,7 @@ function build(initialAuth, opts) {
       select: () => ({ eq: () => ({ maybeSingle: () => {
         cloud.selects++;
         // opts.selectDelay simulates a slow initial read so a sign-out can land while it is in flight.
-        const remote = { data: opts.remoteData || null, error: null };
+        const remote = { data: opts.remoteData || null, error: opts.readError || null };
         return opts.selectDelay ? new Promise((r) => setTimeout(() => r(remote), opts.selectDelay)) : Promise.resolve(remote);
       } }) }),
       upsert: () => { cloud.upserts++; return Promise.resolve({ error: null }); },
@@ -46,7 +47,7 @@ function build(initialAuth, opts) {
     window: {
       supabase: { createClient: () => fakeSupa },
       SUPABASE_CONFIG: { URL: 'https://selfcheck.invalid', KEY: 'ANON-KEY' },
-      addEventListener() {},
+      addEventListener(evt, cb) { events[evt] = cb; },
       HypeAuth,
     },
     document: doc,
@@ -64,7 +65,7 @@ function build(initialAuth, opts) {
   vm.runInContext(source, sandbox);
   sandbox.window.initCloudSync({ appKey: 'hype-audio', syncedKeys: ['hype_audio', 'hype_audio_events'], onStatusChange: (s) => statuses.push(s) });
   return {
-    statuses, cloud, fetches, store, doc,
+    statuses, cloud, fetches, store, doc, events,
     setAuth: (state, tok) => { authState = state; token = tok || null; },
     fire: (session) => listeners.forEach((cb) => cb(session)),
   };
@@ -84,9 +85,30 @@ function build(initialAuth, opts) {
     const t = build('unknown');
     await sleep(400);
     if (!t.statuses.includes('offline') || t.statuses.includes('signedout')) fail(`unreachable auth should read offline, not signedout (saw: ${t.statuses.join(',')})`);
+    t.setAuth('owner', 'OWNER-JWT');
+    if (!t.events.online) fail('failed initialization must register network recovery');
+    t.events.online();
+    await sleep(400);
+    if (t.statuses.at(-1) !== 'synced') fail('network recovery must clear offline and synchronize without an auth event');
+    const reads = t.cloud.selects;
+    t.events.online();
+    await sleep(50);
+    if (t.cloud.selects !== reads) fail('already-ready sync must not restart on every online event');
   }
 
   // 3-5. Signs in later, flushes with the owner token, signs out.
+  {
+    const opts = { readError: { message: 'temporary read failure' } };
+    const t = build('owner', opts);
+    await sleep(100);
+    if (t.cloud.upserts !== 0 || t.statuses.at(-1) !== 'offline') fail('failed read must stay offline without writing');
+    opts.readError = null;
+    t.doc.visibilityState = 'visible';
+    t.doc.handler();
+    await sleep(400);
+    if (t.statuses.at(-1) !== 'synced' || t.cloud.selects !== 2) fail('foreground recovery must retry the failed cloud read and clear offline');
+  }
+
   {
     const t = build('signedout');
     await sleep(400);

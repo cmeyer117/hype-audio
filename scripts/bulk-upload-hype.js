@@ -27,12 +27,10 @@ async function main() {
   }
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const supa = createClient(SUPABASE_URL, SUPABASE_KEY);
-  // Storage RLS requires an authenticated (even anonymous) session — the
-  // browser client gets this implicitly; a bare Node script doesn't.
-  await supa.auth.signInAnonymously();
-
-  const { data: row } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
-  const existing = (row && row.data && Array.isArray(row.data.hype_audio)) ? row.data.hype_audio : [];
+  // Keep the service-role authorization; signing in would replace it with a user JWT.
+  const { data: row, error: readError } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
+  if (readError || !Array.isArray(row?.data?.hype_audio)) throw new Error('Could not read the existing hype library; refusing to modify it.');
+  const existing = row.data.hype_audio;
   const existingIds = new Set(existing.map((c) => c.id));
 
   const newClips = [];
@@ -78,7 +76,7 @@ async function main() {
 
   const merged = existing.concat(newClips);
   const { error: writeErr } = await supa.from('app_state').upsert(
-    { key: APP_KEY, data: { hype_audio: merged }, updated_at: new Date().toISOString() },
+    { key: APP_KEY, data: { ...row.data, hype_audio: merged }, updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
   if (writeErr) {

@@ -299,6 +299,7 @@
         if (myGen !== initGen) return;   // signed out (or superseded) while the read was in flight
         if (!error) {
           syncReady = true;
+          statusState.initFailed = false;
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
             lastSyncedAt = Date.now();
@@ -339,6 +340,12 @@
         else if (!session) { initGen++; syncReady = false; statusState.signedOut = true; updateStatus(); }
       });
     }
+    // A network outage may recover without an auth event. Repeat the guarded
+    // initial pull before allowing any local data to reach the cloud.
+    function retryInit() {
+      if (!syncReady && statusState.initFailed) init();
+    }
+    window.addEventListener('online', retryInit);
     window.addEventListener('beforeunload', flushOnUnload);
     window.addEventListener('pagehide', flushOnUnload);
     // beforeunload/pagehide are unreliable on mobile Safari/PWAs for the
@@ -349,6 +356,7 @@
     // another chance."
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') flushOnUnload();
+      else retryInit();
     });
     window.addEventListener('storage', (e) => { if (e.key && matches(e.key)) schedulePush(); });
   };

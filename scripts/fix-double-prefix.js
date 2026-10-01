@@ -18,9 +18,8 @@ const APP_KEY = 'hype-audio';
 
 async function main() {
   const supa = createClient(SUPABASE_URL, SUPABASE_KEY);
-  await supa.auth.signInAnonymously();
-
-  const { data: row } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
+  const { data: row, error: readError } = await supa.from('app_state').select('data').eq('key', APP_KEY).maybeSingle();
+  if (readError || !Array.isArray(row?.data?.hype_audio)) throw new Error('Could not read the existing hype library; refusing to modify it.');
   const clips = row.data.hype_audio;
   const byId = new Map(clips.map((c) => [c.id, c]));
 
@@ -58,7 +57,7 @@ async function main() {
   }
 
   const { error: writeErr } = await supa.from('app_state').upsert(
-    { key: APP_KEY, data: { hype_audio: kept }, updated_at: new Date().toISOString() },
+    { key: APP_KEY, data: { ...row.data, hype_audio: kept }, updated_at: new Date().toISOString() },
     { onConflict: 'key' }
   );
   if (writeErr) {

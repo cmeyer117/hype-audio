@@ -685,8 +685,7 @@
             alert('No ' + c.label + ' cue recorded yet -- use Record a clip below, mentality: ' + c.key + ', delivery role: Instructional cue.');
             return;
           }
-          HypeAudio.playClip(clip);
-          HypeAudio.logHypeEvent('play', clip, { useCase: clip.use_case, deliveryRole: clip.delivery_role });
+          HypeAudio.playClip(clip, { useCase: clip.use_case, deliveryRole: clip.delivery_role });
         };
         cuesRow.appendChild(btn);
       });
@@ -1609,10 +1608,11 @@
         document.getElementById('focus-outcome').style.display = 'none';
         document.getElementById('focus-active').style.display = 'flex';
         if (focusSound === 'audio') {
-          const focusClip = HypeAudio.playRandomLoop({ useCase: 'study_focus', deliveryRole: ['instrumental', 'noise', 'silence_baseline'] });
-          if (focusClip) {
-            HypeAudio.logHypeEvent('play', focusClip, { useCase: 'study_focus', deliveryRole: focusClip.delivery_role, sessionId: focusSessionId });
-          } else {
+          const focusClip = HypeAudio.playRandomLoop(
+            { useCase: 'study_focus', deliveryRole: ['instrumental', 'noise', 'silence_baseline'] },
+            { useCase: 'study_focus', sessionId: focusSessionId },
+          );
+          if (!focusClip) {
             alert('No study/focus clips tagged instrumental, noise, or silence-baseline yet -- starting silent.');
           }
         }

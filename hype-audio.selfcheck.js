@@ -168,6 +168,19 @@ HypeAudio.playRandomLoop({ pillar: 'faith' });
 assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is false when the active random loop is pillar-scoped, not moment-scoped, even if a matching clip happens to have that moment');
 
 HypeAudio.stopPlayback();
+
+// Caller context enriches the single playback event instead of adding a
+// second event beside playSingle's actual-onplay event.
+const cueBeforeEvents = HypeAudio.listHypeEvents().length;
+const cueAudio = HypeAudio.playClip(HypeAudio.listClips().find(c => c.id === 'focus1'), {
+  useCase: 'study_focus', deliveryRole: 'noise', sessionId: 'session-context-test',
+});
+cueAudio.onplay();
+const cueEvents = HypeAudio.listHypeEvents();
+assertEqual(cueEvents.length, cueBeforeEvents + 1, 'playback context still creates exactly one play event');
+assertEqual(cueEvents[cueEvents.length - 1].sessionId, 'session-context-test', 'playback event retains caller session context');
+assertEqual(cueEvents[cueEvents.length - 1].deliveryRole, 'noise', 'playback event retains delivery metadata');
+HypeAudio.stopPlayback();
 assertEqual(HypeAudio.isPlayingMoment('pre_workout'), false, 'isPlayingMoment is false once playback is stopped');
 
 // isPlayingRandomFilter -- exact-match check so a pillar's own PLAY RANDOM
@@ -579,7 +592,7 @@ console.log('hype-audio.selfcheck.js: all queue-explainer assertions passed');
 
 // logHypeEvent extra param (Focus mode / cue sets measurement)
 HypeAudio.logHypeEvent('play', { id: 'focus1', pillar: 'iron', mentality: 'focustest-ambient' }, { useCase: 'study_focus', deliveryRole: 'noise', sessionId: 'sess-1' });
-const focusLoggedEvent = HypeAudio.listHypeEvents().find((e) => e.clipId === 'focus1' && e.type === 'play');
+const focusLoggedEvent = HypeAudio.listHypeEvents().filter((e) => e.clipId === 'focus1' && e.type === 'play').at(-1);
 assertEqual(focusLoggedEvent.useCase, 'study_focus', 'logHypeEvent records useCase from the extra param');
 assertEqual(focusLoggedEvent.deliveryRole, 'noise', 'logHypeEvent records deliveryRole from the extra param');
 assertEqual(focusLoggedEvent.sessionId, 'sess-1', 'logHypeEvent records sessionId from the extra param');

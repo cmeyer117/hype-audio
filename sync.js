@@ -18,6 +18,10 @@
     if (SUPABASE_URL.indexOf('PASTE-') === 0 || SUPABASE_KEY.indexOf('PASTE-') === 0) return;
 
     let supa = null, pushTimer = null, suppressSync = false, lastSyncedJson = null;
+    // updated_at of the cloud row as last merged or written by this device: the compare-and-swap token for
+    // pushNow (null = no cloud row seen yet, so the first write is an insert). See hype-cas-write.js.
+    let cloudUpdatedAt = null;
+    const CAS_ATTEMPTS = 3;
     // Nothing may push until the initial fetch has round-tripped successfully
     // at least once. Without this, a page that never got a chance to pull
     // real data (slow network, tab closed early) could still push its
@@ -194,18 +198,29 @@
       // Supabase, no console output, until the real exception surfaced).
       // try/catch around a proper await is the safe pattern for these
       // builders.
-      let error, status;
+      // Codex audit 2026-10-03 (P1): the write is a compare-and-swap on the row's updated_at, not a blind
+      // upsert, so a favorite/upload/event another writer landed since our last read is no longer dropped. A
+      // conflict pulls the row, merges it into localStorage via applyRemote, and retries (bounded).
+      let error = { message: 'write conflict: retries exhausted' }, status;
+      let sendState = state, sendJson = json;
       try {
-        ({ error, status } = await supa.from('app_state').upsert(
-          { key: appKey, data: state, updated_at: new Date().toISOString() },
-          { onConflict: 'key' }
-        ));
+        for (let c = 0; c < CAS_ATTEMPTS; c++) {
+          const res = await window.HypeCasWrite.casWrite(supa, appKey, sendState, cloudUpdatedAt);
+          if (res.status === 'ok') { cloudUpdatedAt = res.token; error = null; break; }
+          if (res.status === 'error') { error = res.error; status = res.httpStatus; break; }
+          const pull = await supa.from('app_state').select('data, updated_at').eq('key', appKey).maybeSingle();
+          if (pull.error) { error = pull.error; status = pull.status; break; }
+          cloudUpdatedAt = (pull.data && pull.data.updated_at) || null;
+          if (pull.data && pull.data.data) { lastSyncedJson = JSON.stringify(pull.data.data); applyRemote(pull.data.data); }
+          sendState = collect(); sendJson = JSON.stringify(sendState);
+          if (isTrivial(sendState) || sendJson === lastSyncedJson) { error = null; break; } // merge left nothing to send
+        }
       } catch (e) {
         error = e;
       }
       statusState.pushInFlight = false;
       if (!error) {
-        lastSyncedJson = json;
+        lastSyncedJson = sendJson;
         lastSyncedAt = Date.now();
         statusState.retrying = false;
         statusState.blocked = false;
@@ -259,19 +274,24 @@
       // a true beforeunload/pagehide teardown where the tab is gone either
       // way and this distinction can't matter.
       try {
-        fetch(SUPABASE_URL + '/rest/v1/app_state?on_conflict=key', {
-          method: 'POST',
+        // Codex audit 2026-10-03 (P1): conditional on the version we last merged, never merge-duplicates (that
+        // was the blind upsert). With a token it is a PATCH that matches no rows if a newer write landed, and a
+        // 204 then says nothing about whether it applied, so a conditional flush never marks itself synced: the
+        // next pushNow merges and re-sends if needed (a no-op once the flush did land).
+        const req = window.HypeCasWrite.unloadRequest(SUPABASE_URL, appKey, state, cloudUpdatedAt);
+        fetch(req.url, {
+          method: req.method,
           headers: {
             'apikey': SUPABASE_KEY,
             // The owner's session token (kept current by hype-auth.js; sync, because a page
             // teardown can't await), not the anon key -- the anon role can't write this row.
             'Authorization': 'Bearer ' + bearer,
             'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates',
+            'Prefer': req.prefer,
           },
-          body: JSON.stringify({ key: appKey, data: state, updated_at: new Date().toISOString() }),
+          body: req.body,
           keepalive: true,
-        }).then((resp) => { if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     let channelSubscribed = false;
@@ -295,11 +315,12 @@
       }
       statusState.signedOut = false;
       try {
-        const { data, error } = await supa.from('app_state').select('data').eq('key', appKey).maybeSingle();
+        const { data, error } = await supa.from('app_state').select('data, updated_at').eq('key', appKey).maybeSingle();
         if (myGen !== initGen) return;   // signed out (or superseded) while the read was in flight
         if (!error) {
           syncReady = true;
           statusState.initFailed = false;
+          cloudUpdatedAt = (data && data.updated_at) || null; // CAS token for the next write
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
             lastSyncedAt = Date.now();
@@ -326,7 +347,8 @@
             const incoming = JSON.stringify(payload.new.data);
             if (incoming === lastSyncedJson) return;
             lastSyncedJson = incoming;
-            applyRemote(payload.new.data);
+            applyRemote(payload.new.data); // merged synchronously, so this version is now the one we have seen
+            if (payload.new.updated_at) cloudUpdatedAt = payload.new.updated_at;
           })
           .subscribe();
       }

@@ -33,7 +33,9 @@ function build(initialAuth, opts) {
         const remote = { data: opts.remoteData || null, error: opts.readError || null };
         return opts.selectDelay ? new Promise((r) => setTimeout(() => r(remote), opts.selectDelay)) : Promise.resolve(remote);
       } }) }),
-      upsert: () => { cloud.upserts++; return Promise.resolve({ error: null }); },
+      // the CAS write (hype-cas-write.js): insert when no cloud row was seen, conditional update when one was; both count as a push
+      insert: () => ({ select: () => { cloud.upserts++; return Promise.resolve({ data: [{ updated_at: 'v1' }], error: null }); } }),
+      update: () => { const c = { eq: () => c, select: () => { cloud.upserts++; return Promise.resolve({ data: [{ updated_at: 'v2' }], error: null }); } }; return c; },
     }),
     channel: () => { cloud.channels++; return { on() { return this; }, subscribe() { return this; } }; },
   };
@@ -62,6 +64,7 @@ function build(initialAuth, opts) {
     console, setTimeout, clearTimeout, JSON, Date, Object, Array, Promise,
   };
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'hype-cas-write.js'), 'utf8'), sandbox);
   vm.runInContext(source, sandbox);
   sandbox.window.initCloudSync({ appKey: 'hype-audio', syncedKeys: ['hype_audio', 'hype_audio_events'], onStatusChange: (s) => statuses.push(s) });
   return {

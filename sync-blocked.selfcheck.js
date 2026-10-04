@@ -11,6 +11,7 @@ const path = require('path');
 const vm = require('vm');
 
 const source = fs.readFileSync(path.join(__dirname, 'sync.js'), 'utf8');
+const casSource = fs.readFileSync(path.join(__dirname, 'hype-cas-write.js'), 'utf8');
 
 function fail(msg) { console.error('FAIL: ' + msg); process.exit(1); }
 
@@ -22,7 +23,8 @@ function run(upsertResult) {
     const fakeSupa = {
       from: () => ({
         select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
-        upsert: (row) => { upserts.push(row); return Promise.resolve(upsertResult()); },
+        // no cloud row seen => the CAS write is an insert (hype-cas-write.js); a conflict/upsert is not what this guards
+        insert: (row) => ({ select: () => { upserts.push(row); return Promise.resolve(upsertResult()); } }),
       }),
       channel: () => ({ on() { return this; }, subscribe() { return this; } }),
     };
@@ -43,6 +45,7 @@ function run(upsertResult) {
       console, setTimeout, clearTimeout, JSON, Date, Object, Array, Promise,
     };
     vm.createContext(sandbox);
+    vm.runInContext(casSource, sandbox);
     vm.runInContext(source, sandbox);
     sandbox.window.initCloudSync({
       appKey: 'hype-audio',

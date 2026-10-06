@@ -933,6 +933,7 @@
         titleField.innerHTML = '<label>Title</label>';
         const titleInput = document.createElement('input');
         titleInput.type = 'text';
+        titleInput.setAttribute('aria-label', 'Title'); // rows repeat per clip, so name by aria-label (the visible <label> is not tied to a unique id)
         titleInput.value = clip.title || '';
         titleField.appendChild(titleInput);
         row.appendChild(titleField);
@@ -942,6 +943,7 @@
         hookField.innerHTML = '<label>Hook</label>';
         const hookInput = document.createElement('input');
         hookInput.type = 'text';
+        hookInput.setAttribute('aria-label', 'Hook');
         hookInput.placeholder = 'The line that stops the scroll';
         hookField.appendChild(hookInput);
         row.appendChild(hookField);
@@ -950,6 +952,7 @@
         pillarField.className = 'field';
         pillarField.innerHTML = '<label>Pillar</label>';
         const pillarSelect = document.createElement('select');
+        pillarSelect.setAttribute('aria-label', 'Pillar');
         CONTENT_IDEA_PILLARS.forEach(function (p) {
           const opt = document.createElement('option');
           opt.value = p;
@@ -1047,6 +1050,7 @@
         field.innerHTML = '<label>Suggested mentality: ' + escapeHtml(clip.suggested_mentality) + '</label>';
         const mentalityInput = document.createElement('input');
         mentalityInput.type = 'text';
+        mentalityInput.setAttribute('aria-label', 'Suggested mentality: ' + clip.suggested_mentality); // same text as the visible label (setAttribute needs no HTML escaping)
         mentalityInput.value = clip.suggested_mentality;
         field.appendChild(mentalityInput);
         row.appendChild(field);

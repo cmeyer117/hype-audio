@@ -253,7 +253,7 @@
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
     <div id="sync-status-indicator" style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></div>
-    <input type="search" id="global-search-input" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
+    <input type="search" id="global-search-input" aria-label="Search everything you've said" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
     <button id="content-ideas-link" onclick="showContentIdeas()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
@@ -296,15 +296,15 @@
     <details>
       <summary>Upload a clip (new or existing mentality)</summary>
       <form id="sc-upload-form">
-        <input type="file" id="sc-file-input" accept="audio/*" required>
-        <div class="field"><label>Title</label><input type="text" id="sc-title-input" placeholder="Title" required></div>
-        <div class="field"><label>Mentality</label><input type="text" id="sc-mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
-        <select id="sc-moment-input">
+        <input type="file" id="sc-file-input" aria-label="Audio file" accept="audio/*" required>
+        <div class="field"><label for="sc-title-input">Title</label><input type="text" id="sc-title-input" placeholder="Title" required></div>
+        <div class="field"><label for="sc-mentality-input">Mentality</label><input type="text" id="sc-mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
+        <select id="sc-moment-input" aria-label="Moment">
           <option value="pre_workout">Pre-workout</option>
           <option value="mid_set">Mid-set</option>
           <option value="post_workout">Post-workout</option>
         </select>
-        <select id="sc-source-input">
+        <select id="sc-source-input" aria-label="Source">
           <option value="original">Original</option>
           <option value="licensed">Licensed</option>
           <option value="personal_use">Personal use only</option>
@@ -328,26 +328,26 @@
     <details>
       <summary>Upload a clip</summary>
       <form id="upload-form">
-        <input type="file" id="file-input" accept="audio/*" required>
-        <div class="field"><label>Title</label><input type="text" id="title-input" placeholder="Title" required></div>
-        <div class="field"><label>Mentality</label><input type="text" id="mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
-        <select id="pillar-input" required>
+        <input type="file" id="file-input" aria-label="Audio file" accept="audio/*" required>
+        <div class="field"><label for="title-input">Title</label><input type="text" id="title-input" placeholder="Title" required></div>
+        <div class="field"><label for="mentality-input">Mentality</label><input type="text" id="mentality-input" placeholder="e.g. goggins, dorian, carl" required></div>
+        <select id="pillar-input" aria-label="Pillar" required>
           <option value="mindset">Mindset</option>
           <option value="iron">Iron</option>
           <option value="faith">Faith</option>
           <option value="carl">Carl</option>
         </select>
-        <select id="moment-input">
+        <select id="moment-input" aria-label="Moment">
           <option value="pre_workout">Pre-workout</option>
           <option value="mid_set">Mid-set</option>
           <option value="post_workout">Post-workout</option>
         </select>
-        <select id="source-input">
+        <select id="source-input" aria-label="Source">
           <option value="original">Original</option>
           <option value="licensed">Licensed</option>
           <option value="personal_use">Personal use only</option>
         </select>
-        <select id="use-case-input">
+        <select id="use-case-input" aria-label="Use case">
           <option value="">Use case (optional)</option>
           <option value="study_focus">Study/focus</option>
           <option value="pre_lift">Pre-lift</option>
@@ -355,7 +355,7 @@
           <option value="post_workout">Post-workout</option>
           <option value="recovery">Recovery</option>
         </select>
-        <select id="delivery-role-input">
+        <select id="delivery-role-input" aria-label="Delivery role">
           <option value="">Delivery role (optional)</option>
           <option value="music">Music</option>
           <option value="noise">Noise</option>
@@ -383,19 +383,19 @@
         <button type="button" class="record-btn" id="record-rerecord-btn">🔁 Re-record</button>
       </div>
       <form id="record-save-form" style="display:none">
-        <div class="field"><label>Title</label><input type="text" id="record-title-input" placeholder="Title" required></div>
-        <div class="field"><label>Mentality</label><input type="text" id="record-mentality-input" placeholder="e.g. drive, discipline -- or leave blank, a suggestion appears once it's transcribed"></div>
-        <select id="record-moment-input">
+        <div class="field"><label for="record-title-input">Title</label><input type="text" id="record-title-input" placeholder="Title" required></div>
+        <div class="field"><label for="record-mentality-input">Mentality</label><input type="text" id="record-mentality-input" placeholder="e.g. drive, discipline -- or leave blank, a suggestion appears once it's transcribed"></div>
+        <select id="record-moment-input" aria-label="Moment">
           <option value="pre_workout">Pre-workout</option>
           <option value="mid_set">Mid-set</option>
           <option value="post_workout">Post-workout</option>
         </select>
-        <select id="record-source-input">
+        <select id="record-source-input" aria-label="Source">
           <option value="personal_use" selected>Personal use only</option>
           <option value="original">Original</option>
           <option value="licensed">Licensed</option>
         </select>
-        <select id="record-use-case-input">
+        <select id="record-use-case-input" aria-label="Use case">
           <option value="">Use case (optional)</option>
           <option value="study_focus">Study/focus</option>
           <option value="pre_lift">Pre-lift</option>
@@ -403,7 +403,7 @@
           <option value="post_workout">Post-workout</option>
           <option value="recovery">Recovery</option>
         </select>
-        <select id="record-delivery-role-input">
+        <select id="record-delivery-role-input" aria-label="Delivery role">
           <option value="" selected>Delivery role (optional)</option>
           <option value="motivational_speech">Motivational speech</option>
           <option value="instructional_cue">Instructional cue</option>

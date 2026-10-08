@@ -1016,32 +1016,45 @@
     var secret = getUploadSecret();
     if (!secret) return { id: null, error: 'Cancelled — no passphrase entered.' };
 
-    var res;
+    var controller = new AbortController();
+    var timer;
+    var deadline = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        controller.abort();
+        reject(new Error('content handoff timeout'));
+      }, 30000);
+    });
+    var unconfirmed = { id: null, error: 'Content idea not confirmed. Check Content before sending again.' };
     try {
-      res = await fetch('/api/create-content-idea', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
-        body: JSON.stringify({
-          title: fields.title,
-          hook: fields.hook,
-          pillar: fields.pillar,
-          body: fields.body,
-          sourceClipId: clip.id,
-          sourceStorageUrl: clip.storage_url,
-        }),
-      });
+      return await Promise.race([deadline, (async function () {
+        var res = await fetch('/api/create-content-idea', {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
+          body: JSON.stringify({
+            title: fields.title,
+            hook: fields.hook,
+            pillar: fields.pillar,
+            body: fields.body,
+            sourceClipId: clip.id,
+            sourceStorageUrl: clip.storage_url,
+          }),
+        });
+        if (res.status === 401) clearUploadSecret();
+        var responseBody = {};
+        try { responseBody = await res.json(); } catch (e) {}
+        if (!res.ok) {
+          return { id: null, error: typeof responseBody?.error === 'string' ? responseBody.error : ('Failed (' + res.status + ').') };
+        }
+        return typeof responseBody?.id === 'string' && responseBody.id.trim()
+          ? { id: responseBody.id, error: null } : unconfirmed;
+      })()]);
     } catch (e) {
-      return { id: null, error: 'Network error.' };
+      return unconfirmed;
+    } finally {
+      clearTimeout(timer);
+      controller.abort();
     }
-
-    var responseBody = {};
-    try { responseBody = await res.json(); } catch (e) {}
-
-    if (!res.ok) {
-      if (res.status === 401) clearUploadSecret();
-      return { id: null, error: responseBody.error || ('Failed (' + res.status + ').') };
-    }
-    return { id: responseBody.id, error: null };
   }
 
   if (typeof window !== 'undefined') {

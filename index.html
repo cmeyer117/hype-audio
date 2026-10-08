@@ -1215,19 +1215,21 @@
           cueItem.textContent = 'Edit cue (trim, exercise)';
           cueItem.onclick = function () {
             dropdown.classList.remove('open');
-            // Compared as a property, never built into a selector string: clip ids come from the synced row.
-            const open = Array.prototype.find.call(list.querySelectorAll('.cue-editor-host'), function (h) { return h.dataset.clipId === clip.id; });
-            if (open) { open.remove(); return; }
+            // Keyed in a Map (never a selector string built from a synced id). Open editors survive re-renders: every playback change
+            // re-renders this list (onPlaybackChange), which would otherwise destroy an editor mid-edit; see the re-attach below.
+            const open = openCueEdits.get(clip.id);
+            if (open) { open.editor.destroy(); open.host.remove(); openCueEdits.delete(clip.id); return; }
             const host = document.createElement('div');
             host.className = 'cue-editor-host';
-            host.dataset.clipId = clip.id;
+            const closeEditor = function () { editor.destroy(); host.remove(); openCueEdits.delete(clip.id); };
             const editor = buildCueEditor({
               src: clip.storage_url,
               initial: { trim_start: clip.trim_start, trim_end: clip.trim_end, exercise: clip.exercise },
-              onSave: function (value) { editor.destroy(); HypeAudio.setClipCue(clip.id, value); renderSection(key, mentality); },
-              onCancel: function () { editor.destroy(); host.remove(); },
+              onSave: function (value) { HypeAudio.setClipCue(clip.id, value); closeEditor(); renderSection(key, mentality); },
+              onCancel: closeEditor,
             });
             host.appendChild(editor.el);
+            openCueEdits.set(clip.id, { editor: editor, host: host });
             list.insertBefore(host, row.nextSibling);
           };
           dropdown.appendChild(cueItem);
@@ -1250,6 +1252,9 @@
         row.appendChild(info);
         row.appendChild(actions);
         list.appendChild(row);
+        // An editor left open survives the re-render (same DOM, same slider positions and preview).
+        const openEdit = openCueEdits.get(clip.id);
+        if (openEdit) list.appendChild(openEdit.host);
       });
     }
 
@@ -1543,9 +1548,13 @@
     // ---- Own Cue Studio phase 1 (docs/superpowers/specs/2026-10-08-own-cue-studio-design.md) ----
     // Trim = two numbers on the clip's metadata; the audio file is never touched. Values are set with .value / .textContent only.
     let cueEditorSeq = 0;
+    // Open "Edit cue" editors by clip id. A Map, not an object: ids come from the synced row.
+    const openCueEdits = new Map();
     function formatClock(sec) {
-      const t = Math.max(0, Math.round(sec));
-      return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+      const t = Math.max(0, Math.round(sec * 10) / 10);
+      const whole = Math.floor(t);
+      const tenth = Math.round((t - whole) * 10);
+      return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0') + (tenth ? '.' + tenth : '');
     }
     // MediaRecorder webm blobs usually report duration Infinity until the end has been sought: resolve the real length once.
     function resolveDuration(audio, cb) {

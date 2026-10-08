@@ -32,6 +32,84 @@
     saveClips(clips);
   }
 
+  // ---- Own Cue Studio phase 1 (docs/superpowers/specs/2026-10-08-own-cue-studio-design.md) ----
+  // A trim is two numbers on the clip's metadata (trim_start / trim_end, seconds): the audio file and its storage_url are never
+  // touched, so the untrimmed original is always one tap away. An exercise is a normalised name used to prefer a matching cue.
+  const MIN_TRIM_WINDOW = 0.5;
+  function isNum(v) { return typeof v === 'number' && isFinite(v); }
+
+  // { start, end } (end null = play to the end) or null when there is no usable trim. An unknown duration trusts the stored window.
+  function normalizeTrim(clip, duration) {
+    if (!clip) return null;
+    const known = isNum(duration) && duration > 0;
+    let start = isNum(clip.trim_start) && clip.trim_start >= 0 ? clip.trim_start : 0;
+    let end = isNum(clip.trim_end) && clip.trim_end > 0 ? clip.trim_end : null;
+    if (start === 0 && end === null) return null;
+    if (known) {
+      if (start >= duration - MIN_TRIM_WINDOW) return null; // would leave (almost) nothing to play
+      if (end !== null && end >= duration) end = null; // an end beyond the file just means "to the end"
+    }
+    if (end !== null && end - start < MIN_TRIM_WINDOW) return null;
+    if (start === 0 && end === null) return null;
+    return { start: start, end: end };
+  }
+
+  // Letters, digits, spaces and hyphens only; lowercase; one space between words; at most 60 characters. Synced rows can be written
+  // by anyone holding the public key, so this runs at every boundary (on write AND again when matching), never only in the editor.
+  function normalizeExerciseName(s) {
+    if (typeof s !== 'string') return null;
+    const n = s.toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+    return n || null;
+  }
+
+  // Writes (or clears) the whole cue as one unit: trim_start, trim_end and exercise. An invalid trim is not stored. Clearing REMOVES
+  // the fields. Whole-clip last-write-wins under sync (sync.js), so the three fields move together by design.
+  function setClipCue(id, cue) {
+    cue = cue || {};
+    const clips = listClips();
+    const idx = clips.findIndex(function (c) { return c.id === id; });
+    if (idx === -1) return;
+    const next = Object.assign({}, clips[idx]);
+    delete next.trim_start; delete next.trim_end; delete next.exercise;
+    const win = normalizeTrim({ trim_start: cue.trimStart, trim_end: cue.trimEnd }, undefined);
+    if (win) {
+      if (win.start > 0) next.trim_start = win.start;
+      if (win.end !== null) next.trim_end = win.end;
+    }
+    const ex = normalizeExerciseName(cue.exercise);
+    if (ex) next.exercise = ex;
+    next.updated_at = Date.now();
+    clips[idx] = next;
+    saveClips(clips);
+  }
+
+  // Seeks to the trim start once metadata is known, and stops at the trim end by calling onEnd ONCE (after pausing). Installs
+  // nothing for a clip with no trim fields, so an untrimmed clip behaves exactly as before. Used by playSingle AND by the editor's
+  // own preview element (which must stop at the window end without going near the playback queue). Returns the live window getter.
+  function watchTrim(audio, clipLike, onEnd) {
+    if (!clipLike || (clipLike.trim_start == null && clipLike.trim_end == null)) return null;
+    let win = null;
+    let seeked = false;
+    let done = false;
+    function resolve() { win = normalizeTrim(clipLike, audio.duration); audio._hypeTrim = win; return win; }
+    function seek() {
+      const w = resolve();
+      if (!seeked && w && w.start > 0) { seeked = true; audio.currentTime = w.start; }
+    }
+    if (audio.readyState >= 1 && isNum(audio.duration) && audio.duration > 0) seek();
+    else audio.addEventListener('loadedmetadata', seek);
+    audio.addEventListener('timeupdate', function () {
+      if (done) return;
+      const w = win || resolve();
+      if (w && w.end !== null && audio.currentTime >= w.end) {
+        done = true;
+        try { audio.pause(); } catch (e) {}
+        if (onEnd) onEnd();
+      }
+    });
+    return { window: function () { return win; } };
+  }
+
   // Soft-delete: mark instead of remove. A plain removal would make the
   // clip disappear from this device's array but not the shared one, and
   // the cloud-sync merge (sync.js's mergeArrays) can't tell "never synced
@@ -88,6 +166,12 @@
       pool = listActiveClips().filter(clipFilterPredicate(filter));
     }
     if (pool.length === 0) return null;
+    // Own Cue Studio: prefer a cue tied to this exercise when one exists in THIS pool; otherwise the pool is unchanged.
+    const wantedExercise = normalizeExerciseName(filter.exercise);
+    if (wantedExercise) {
+      const tied = pool.filter(function (c) { return normalizeExerciseName(c.exercise) === wantedExercise; });
+      if (tied.length) pool = tied;
+    }
     const eligible = filterEligiblePool(pool);
     if (calmPairs && calmPairs.length && isCalmPhase(filter.phase)) {
       const weighted = [];
@@ -178,8 +262,8 @@
   // back to the same iron/mindset/carl pillar pool the "Hype Me Up" home
   // button already draws from, so the button isn't dead on arrival while
   // the mid_set pool is still empty (see docs/superpowers/specs/2026-07-27-hype-audio-row-fusion-design.md).
-  function pickMidSetClip() {
-    return pickRandom({ moment: 'mid_set' }) || pickRandom({ pillar: ['iron', 'mindset', 'carl'] });
+  function pickMidSetClip(exercise) {
+    return pickRandom({ moment: 'mid_set', exercise: exercise }) || pickRandom({ pillar: ['iron', 'mindset', 'carl'], exercise: exercise });
   }
 
   // 2026-07-27: Carl decided he wants this on immediately (no tap needed) --
@@ -187,8 +271,8 @@
   // logged. gym.html's startRestTimer is the call site that reads this flag.
   const AUTO_PLAY_HYPE = true;
 
-  function playMidSetHype() {
-    const clip = pickMidSetClip();
+  function playMidSetHype(exercise) {
+    const clip = pickMidSetClip(exercise);
     if (clip) playClip(clip);
     return clip;
   }
@@ -401,9 +485,22 @@
       if (result.index !== null && queue) queue.index = result.index;
       playSingle(result.clip);
     } else if (result.type === 'restart' && currentAudio) {
-      currentAudio.currentTime = 0;
+      restartCurrent();
       currentAudio.play().catch(function () {});
     }
+  }
+
+  // Back to the start of what is HEARD: the trim start for a trimmed clip, 0 otherwise.
+  function restartCurrent() {
+    if (!currentAudio) return;
+    currentAudio.currentTime = currentAudio._hypeTrim ? currentAudio._hypeTrim.start : 0;
+  }
+
+  // Seconds into the audible part (measured from the trim start), which is what the 'previous track' threshold means.
+  function secondsIntoCurrent() {
+    if (!currentAudio) return 0;
+    const start = currentAudio._hypeTrim ? currentAudio._hypeTrim.start : 0;
+    return Math.max(0, currentAudio.currentTime - start);
   }
 
   function setupMediaSessionHandlers() {
@@ -418,7 +515,7 @@
       applyMediaSessionResult(mediaSessionNext(queue, randomFilter, repeatClip, favoritesFilter));
     });
     navigator.mediaSession.setActionHandler('previoustrack', function () {
-      applyMediaSessionResult(mediaSessionPrevious(queue, randomFilter, repeatClip, currentAudio ? currentAudio.currentTime : 0, favoritesFilter));
+      applyMediaSessionResult(mediaSessionPrevious(queue, randomFilter, repeatClip, secondsIntoCurrent(), favoritesFilter));
     });
   }
 
@@ -460,11 +557,17 @@
       notifyChange();
     };
     audio.onpause = notifyChange;
-    audio.onended = function () {
+    // The natural end and a trim end share one finish, so a late timeupdate or 'ended' can never advance twice.
+    let finished = false;
+    function finish() {
+      if (finished) return;
+      finished = true;
       if (audio !== currentAudio) return; // stale handler after a newer play started
       currentClipId = null;
       advance();
-    };
+    }
+    audio.onended = finish;
+    watchTrim(audio, clip, finish);
     audio.onerror = function () {
       if (audio !== currentAudio) return;
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -943,6 +1046,12 @@
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,
+      normalizeTrim: normalizeTrim,
+      normalizeExerciseName: normalizeExerciseName,
+      setClipCue: setClipCue,
+      watchTrim: watchTrim,
+      restartCurrent: restartCurrent,
+      secondsIntoCurrent: secondsIntoCurrent,
       playPrRant: playPrRant,
       playStateMode: playStateMode,
       playClip: playClip,
@@ -997,6 +1106,12 @@
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
       playMidSetHype: playMidSetHype,
+      normalizeTrim: normalizeTrim,
+      normalizeExerciseName: normalizeExerciseName,
+      setClipCue: setClipCue,
+      watchTrim: watchTrim,
+      restartCurrent: restartCurrent,
+      secondsIntoCurrent: secondsIntoCurrent,
       playPrRant: playPrRant,
       playStateMode: playStateMode,
       mediaSessionNext: mediaSessionNext,

@@ -139,6 +139,14 @@
     background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%);
     color: #0a0a0a; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
+  /* Own Cue Studio (spec 2026-10-08): trim + exercise editor */
+  .cue-editor { display: flex; flex-direction: column; gap: 12px; padding: 10px 0; }
+  .cue-editor .field { display: flex; flex-direction: column; gap: 6px; }
+  .cue-editor input[type="range"] { width: 100%; min-height: 32px; }
+  .cue-editor .cue-readout { font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary); }
+  .cue-editor .cue-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cue-editor .cue-actions button { min-height: 44px; }
+  .cue-editor-host { padding: 0 16px 12px; }
   .record-btn {
     padding: 12px 20px; border: 0; border-radius: 12px;
     background: linear-gradient(135deg, #F0524E 0%, var(--iron) 100%);
@@ -409,6 +417,7 @@
           <option value="instructional_cue">Instructional cue</option>
           <option value="scripture_prayer">Scripture/prayer</option>
         </select>
+        <div id="record-cue-host"></div>
         <button type="submit">Save</button>
       </form>
       <div id="mentality-review-list"></div>
@@ -1129,7 +1138,9 @@
         titleEl.textContent = clip.title;
         const metaEl = document.createElement('div');
         metaEl.className = 'clip-meta';
-        metaEl.textContent = (clip.mentality || UNTAGGED_LABEL.toLowerCase()) + ' · ' + clip.moment;
+        const cueEx = HypeAudio.normalizeExerciseName(clip.exercise);
+        metaEl.textContent = (clip.mentality || UNTAGGED_LABEL.toLowerCase()) + ' · ' + clip.moment +
+          (HypeAudio.normalizeTrim(clip, undefined) ? ' · trimmed' : '') + (cueEx ? ' · ' + cueEx : '');
         info.appendChild(titleEl);
         info.appendChild(metaEl);
         const preview = HypeAudio.quotePreview(clip, 80);
@@ -1198,6 +1209,28 @@
           renderSection(key, mentality);
         };
         dropdown.appendChild(cooldownItem);
+        if (clip.pillar === 'carl') {
+          const cueItem = document.createElement('button');
+          cueItem.className = 'menu-item menu-item-neutral';
+          cueItem.textContent = 'Edit cue (trim, exercise)';
+          cueItem.onclick = function () {
+            dropdown.classList.remove('open');
+            const open = list.querySelector('.cue-editor-host[data-clip-id="' + clip.id.replace(/["\\]/g, '') + '"]');
+            if (open) { open.remove(); return; }
+            const host = document.createElement('div');
+            host.className = 'cue-editor-host';
+            host.dataset.clipId = clip.id;
+            const editor = buildCueEditor({
+              src: clip.storage_url,
+              initial: { trim_start: clip.trim_start, trim_end: clip.trim_end, exercise: clip.exercise },
+              onSave: function (value) { editor.destroy(); HypeAudio.setClipCue(clip.id, value); renderSection(key, mentality); },
+              onCancel: function () { editor.destroy(); host.remove(); },
+            });
+            host.appendChild(editor.el);
+            list.insertBefore(host, row.nextSibling);
+          };
+          dropdown.appendChild(cueItem);
+        }
         dropdown.appendChild(delItem);
         menuBtn.onclick = function (e) {
           e.stopPropagation();
@@ -1447,9 +1480,16 @@
         document.getElementById('record-preview').style.display = 'flex';
         document.getElementById('record-save-form').style.display = 'flex';
         document.getElementById('record-preview-audio').src = recordedUrl;
+        // Trim + exercise for this take (two numbers and a name; the recording itself is uploaded whole and never altered).
+        if (recordCue) recordCue.destroy();
+        recordCue = buildCueEditor({ src: recordedUrl, initial: {} });
+        document.getElementById('record-cue-host').replaceChildren(recordCue.el);
       };
 
+      var recordCue = null;
       var resetRecordUi = function () {
+        if (recordCue) { recordCue.destroy(); recordCue = null; }
+        document.getElementById('record-cue-host').replaceChildren();
         if (recordedUrl) URL.revokeObjectURL(recordedUrl);
         recordedBlob = null;
         recordedUrl = null;
@@ -1475,8 +1515,10 @@
           const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
           const { url, error } = await HypeAudio.uploadClipFile(file);
           if (!url) { alert(error || 'Upload failed.'); return; }
+          const newClipId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+          const cue = recordCue ? recordCue.getValue() : null;
           HypeAudio.addClip({
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+            id: newClipId,
             title: document.getElementById('record-title-input').value.trim(),
             mentality: document.getElementById('record-mentality-input').value.trim().toLowerCase(),
             pillar: 'carl',
@@ -1488,12 +1530,192 @@
             created_at: new Date().toISOString(),
             play_count: 0,
           });
+          if (cue) HypeAudio.setClipCue(newClipId, cue);
           resetRecordUi();
           renderSection(currentPillar, currentMentality);
         } finally {
           saveBtn.disabled = false;
         }
       });
+    }
+
+    // ---- Own Cue Studio phase 1 (docs/superpowers/specs/2026-10-08-own-cue-studio-design.md) ----
+    // Trim = two numbers on the clip's metadata; the audio file is never touched. Values are set with .value / .textContent only.
+    let cueEditorSeq = 0;
+    function formatClock(sec) {
+      const t = Math.max(0, Math.round(sec));
+      return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+    }
+    // MediaRecorder webm blobs usually report duration Infinity until the end has been sought: resolve the real length once.
+    function resolveDuration(audio, cb) {
+      function ok() { return isFinite(audio.duration) && audio.duration > 0; }
+      function onMeta() {
+        audio.removeEventListener('loadedmetadata', onMeta);
+        if (ok()) { cb(audio.duration); return; }
+        function onSeek() {
+          audio.removeEventListener('timeupdate', onSeek);
+          const d = audio.duration;
+          audio.currentTime = 0;
+          if (isFinite(d) && d > 0) cb(d);
+        }
+        audio.addEventListener('timeupdate', onSeek);
+        audio.currentTime = 1e101;
+      }
+      if (audio.readyState >= 1) onMeta(); else audio.addEventListener('loadedmetadata', onMeta);
+    }
+
+    // opts: { src, initial: { trim_start, trim_end, exercise }, onSave(value), onCancel() }. Returns { el, getValue, destroy }.
+    function buildCueEditor(opts) {
+      const id = ++cueEditorSeq;
+      const initial = opts.initial || {};
+      const wrap = document.createElement('div');
+      wrap.className = 'cue-editor';
+
+      const exField = document.createElement('div');
+      exField.className = 'field';
+      const exLabel = document.createElement('label');
+      exLabel.htmlFor = 'cue-ex-' + id;
+      exLabel.textContent = 'Exercise (optional)';
+      const cueEx = document.createElement('input');
+      cueEx.id = 'cue-ex-' + id;
+      cueEx.type = 'text';
+      cueEx.maxLength = 60;
+      cueEx.autocomplete = 'off';
+      cueEx.placeholder = 'e.g. bench press';
+      cueEx.setAttribute('aria-label', 'Exercise this cue is for (optional)');
+      cueEx.setAttribute('list', 'cue-dl-' + id);
+      cueEx.value = HypeAudio.normalizeExerciseName(initial.exercise) || '';
+      const dl = document.createElement('datalist');
+      dl.id = 'cue-dl-' + id;
+      const seen = {};
+      HypeAudio.listActiveClips().forEach(function (c) {
+        const n = HypeAudio.normalizeExerciseName(c.exercise);
+        if (n && !seen[n]) { seen[n] = true; const o = document.createElement('option'); o.value = n; dl.appendChild(o); }
+      });
+      exField.appendChild(exLabel); exField.appendChild(cueEx); exField.appendChild(dl);
+
+      const startField = document.createElement('div');
+      startField.className = 'field';
+      const startLabel = document.createElement('label');
+      startLabel.htmlFor = 'cue-start-' + id;
+      startLabel.textContent = 'Trim start';
+      const cueStart = document.createElement('input');
+      cueStart.id = 'cue-start-' + id;
+      cueStart.type = 'range';
+      cueStart.min = '0'; cueStart.max = '0'; cueStart.step = '0.1'; cueStart.value = '0';
+      cueStart.disabled = true;
+      cueStart.setAttribute('aria-label', 'Trim start, in seconds');
+      startField.appendChild(startLabel); startField.appendChild(cueStart);
+
+      const endField = document.createElement('div');
+      endField.className = 'field';
+      const endLabel = document.createElement('label');
+      endLabel.htmlFor = 'cue-end-' + id;
+      endLabel.textContent = 'Trim end';
+      const cueEnd = document.createElement('input');
+      cueEnd.id = 'cue-end-' + id;
+      cueEnd.type = 'range';
+      cueEnd.min = '0'; cueEnd.max = '0'; cueEnd.step = '0.1'; cueEnd.value = '0';
+      cueEnd.disabled = true;
+      cueEnd.setAttribute('aria-label', 'Trim end, in seconds');
+      endField.appendChild(endLabel); endField.appendChild(cueEnd);
+
+      const readout = document.createElement('div');
+      readout.className = 'cue-readout';
+      readout.setAttribute('role', 'status');
+      readout.setAttribute('aria-live', 'polite');
+      readout.textContent = 'Loading the clip length…';
+
+      const actions = document.createElement('div');
+      actions.className = 'cue-actions';
+      const playBtn = document.createElement('button');
+      playBtn.type = 'button';
+      playBtn.className = 'record-btn';
+      playBtn.textContent = '▶ Play trimmed';
+      playBtn.disabled = true;
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'record-btn';
+      resetBtn.textContent = 'Reset trim';
+      resetBtn.disabled = true;
+      actions.appendChild(playBtn); actions.appendChild(resetBtn);
+      let saveBtn = null;
+      if (opts.onSave) {
+        saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'record-btn';
+        saveBtn.textContent = 'Save cue';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'record-btn';
+        cancelBtn.textContent = 'Cancel';
+        saveBtn.onclick = function () { opts.onSave(getValue()); };
+        cancelBtn.onclick = function () { if (opts.onCancel) opts.onCancel(); };
+        actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+      }
+
+      wrap.appendChild(exField);
+      wrap.appendChild(startField);
+      wrap.appendChild(endField);
+      wrap.appendChild(readout);
+      wrap.appendChild(actions);
+
+      let duration = 0;
+      const MIN_GAP = 0.5;
+      function renderReadout() {
+        readout.textContent = formatClock(Number(cueStart.value)) + ' to ' + formatClock(Number(cueEnd.value)) + ' of ' + formatClock(duration);
+      }
+      cueStart.oninput = function () {
+        if (Number(cueStart.value) > Number(cueEnd.value) - MIN_GAP) cueStart.value = String(Math.max(0, Number(cueEnd.value) - MIN_GAP));
+        renderReadout();
+      };
+      cueEnd.oninput = function () {
+        if (Number(cueEnd.value) < Number(cueStart.value) + MIN_GAP) cueEnd.value = String(Math.min(duration, Number(cueStart.value) + MIN_GAP));
+        renderReadout();
+      };
+      resetBtn.onclick = function () { cueStart.value = '0'; cueEnd.value = String(duration); renderReadout(); };
+
+      function getValue() {
+        const start = Number(cueStart.value);
+        const end = Number(cueEnd.value);
+        return {
+          trimStart: duration > 0 && start > 0.05 ? start : null,
+          trimEnd: duration > 0 && end < duration - 0.05 ? end : null,
+          exercise: cueEx.value,
+        };
+      }
+
+      // Preview: its own Audio element, stops at the window end, never goes near the playback queue.
+      let preview = null;
+      function stopPreview() {
+        if (preview) { try { preview.pause(); } catch (e) {} preview = null; }
+        playBtn.textContent = '▶ Play trimmed';
+      }
+      playBtn.onclick = function () {
+        if (preview) { stopPreview(); return; }
+        HypeAudio.stopPlayback(); // one audio owner: the library player stops while the preview plays
+        const v = getValue();
+        preview = new Audio(opts.src);
+        const mine = preview;
+        HypeAudio.watchTrim(mine, { trim_start: v.trimStart, trim_end: v.trimEnd }, function () { if (preview === mine) stopPreview(); });
+        mine.addEventListener('ended', function () { if (preview === mine) stopPreview(); });
+        playBtn.textContent = '■ Stop';
+        mine.play().catch(function () { if (preview === mine) stopPreview(); });
+      };
+
+      const probe = new Audio(opts.src);
+      probe.preload = 'metadata';
+      resolveDuration(probe, function (d) {
+        duration = d;
+        const norm = HypeAudio.normalizeTrim(initial, d);
+        cueStart.max = String(d); cueEnd.max = String(d);
+        cueStart.value = String(norm ? norm.start : 0);
+        cueEnd.value = String(norm && norm.end !== null ? norm.end : d);
+        cueStart.disabled = false; cueEnd.disabled = false; playBtn.disabled = false; resetBtn.disabled = false;
+        renderReadout();
+      });
+
+      return { el: wrap, getValue: getValue, destroy: function () { stopPreview(); probe.removeAttribute('src'); } };
     }
 
     function escapeHtml(s) {

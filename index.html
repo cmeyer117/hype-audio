@@ -1215,7 +1215,8 @@
           cueItem.textContent = 'Edit cue (trim, exercise)';
           cueItem.onclick = function () {
             dropdown.classList.remove('open');
-            const open = list.querySelector('.cue-editor-host[data-clip-id="' + clip.id.replace(/["\\]/g, '') + '"]');
+            // Compared as a property, never built into a selector string: clip ids come from the synced row.
+            const open = Array.prototype.find.call(list.querySelectorAll('.cue-editor-host'), function (h) { return h.dataset.clipId === clip.id; });
             if (open) { open.remove(); return; }
             const host = document.createElement('div');
             host.className = 'cue-editor-host';

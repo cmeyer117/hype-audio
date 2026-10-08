@@ -1562,13 +1562,17 @@
       function onMeta() {
         audio.removeEventListener('loadedmetadata', onMeta);
         if (ok()) { cb(audio.duration); return; }
+        // Stay subscribed until the length is actually finite: the first event after the seek can still report Infinity.
         function onSeek() {
-          audio.removeEventListener('timeupdate', onSeek);
           const d = audio.duration;
+          if (!(isFinite(d) && d > 0)) return;
+          audio.removeEventListener('timeupdate', onSeek);
+          audio.removeEventListener('durationchange', onSeek);
           audio.currentTime = 0;
-          if (isFinite(d) && d > 0) cb(d);
+          cb(d);
         }
         audio.addEventListener('timeupdate', onSeek);
+        audio.addEventListener('durationchange', onSeek);
         audio.currentTime = 1e101;
       }
       if (audio.readyState >= 1) onMeta(); else audio.addEventListener('loadedmetadata', onMeta);

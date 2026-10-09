@@ -62,6 +62,16 @@
     return n || null;
   }
 
+  // A cue tagged "bench press" should fire for "Barbell Bench Press": the tag matches when every word of it appears in the
+  // exercise's name (both normalised). Exact tag matches are tried first by the caller.
+  function exerciseTagMatches(tag, wanted) {
+    const t = normalizeExerciseName(tag);
+    const w = normalizeExerciseName(wanted);
+    if (!t || !w) return false;
+    const words = w.split(/[ -]/);
+    return t.split(/[ -]/).every(function (x) { return words.indexOf(x) !== -1; });
+  }
+
   // Writes (or clears) the whole cue as one unit: trim_start, trim_end and exercise. An invalid trim is not stored. Clearing REMOVES
   // the fields. Whole-clip last-write-wins under sync (sync.js), so the three fields move together by design.
   function setClipCue(id, cue) {
@@ -169,8 +179,9 @@
     // Own Cue Studio: prefer a cue tied to this exercise when one exists in THIS pool; otherwise the pool is unchanged.
     const wantedExercise = normalizeExerciseName(filter.exercise);
     if (wantedExercise) {
-      const tied = pool.filter(function (c) { return normalizeExerciseName(c.exercise) === wantedExercise; });
-      if (tied.length) pool = tied;
+      const exact = pool.filter(function (c) { return normalizeExerciseName(c.exercise) === wantedExercise; });
+      const loose = exact.length ? exact : pool.filter(function (c) { return exerciseTagMatches(c.exercise, wantedExercise); });
+      if (loose.length) pool = loose;
     }
     const eligible = filterEligiblePool(pool);
     if (calmPairs && calmPairs.length && isCalmPhase(filter.phase)) {

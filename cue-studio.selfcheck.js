@@ -151,6 +151,11 @@ eq(picks('deadlift'), ['g1', 'g2', 'x1', 'x2'], 'no clip for that exercise: fall
 eq(picks(undefined), ['g1', 'g2', 'x1', 'x2'], 'no argument: unchanged behaviour');
 eq(picks(''), ['g1', 'g2', 'x1', 'x2'], 'a blank exercise: unchanged behaviour');
 eq(H.playMidSetHype('hack squat').id, 'x2', 'playMidSetHype passes the exercise through');
+eq(picks('Barbell Bench Press'), ['x1'], 'a tag matches a longer real exercise name when every tag word is in it');
+eq(picks('Smith Machine Hack Squat'), ['x2'], 'same for another tag');
+eq(picks('Press'), ['g1', 'g2', 'x1', 'x2'], 'an exercise name shorter than the tag does not match');
+H.addClip(clip({ id: 'x3', exercise: 'barbell bench press' }));
+eq(picks('Barbell Bench Press'), ['x3'], 'an exact tag beats a looser one');
 
 
 // ---- Codex spec review: restart, preview and hostile synced data ----

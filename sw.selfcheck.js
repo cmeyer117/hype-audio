@@ -48,4 +48,11 @@ assertEqual(stripped.url, rangedRequest.url, 'stripRangeRequest preserves the re
 const unrangedRequest = new Request('https://vikpcejlyxieguorwysf.supabase.co/storage/v1/object/public/hype-audio/clip.mp3');
 assertEqual(stripRangeRequest(unrangedRequest).headers.has('range'), false, 'stripRangeRequest is a no-op (no Range header) when there was none to begin with');
 
+// quote-over-bed: a CORS-mode request (the bed's crossOrigin='anonymous') must not be served an opaque cached response
+const { canServeCached } = require('./sw.js');
+assertEqual(canServeCached({ mode: 'cors' }, { type: 'opaque' }), false, 'a CORS request skips an opaque cached response');
+assertEqual(canServeCached({ mode: 'cors' }, { type: 'cors' }), true, 'a CORS request uses a CORS cached response');
+assertEqual(canServeCached({ mode: 'no-cors' }, { type: 'opaque' }), true, 'a no-cors request still uses an opaque cached response');
+assertEqual(canServeCached({ mode: 'cors' }, undefined), false, 'nothing cached: fetch');
+
 console.log('sw.selfcheck.js: all assertions passed');

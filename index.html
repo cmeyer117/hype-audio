@@ -270,6 +270,7 @@
     <div class="moment-row" id="moment-row"></div>
     <div class="moment-row" id="state-mode-row"></div>
     <div class="moment-row" id="cues-row"></div>
+    <div class="moment-row" id="quote-bed-row"></div>
 
     <details id="focus-details">
       <summary>Focus</summary>
@@ -475,7 +476,8 @@
   <script src="hype-auth.js"></script>
 <script src="hype-cas-write.js"></script>
 <script src="sync.js"></script>
-  <script src="hype-audio.js"></script>
+  <script src="quote-bed.js"></script>
+<script src="hype-audio.js"></script>
   <script src="weekly-recap.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
@@ -1140,7 +1142,8 @@
         metaEl.className = 'clip-meta';
         const cueEx = HypeAudio.normalizeExerciseName(clip.exercise);
         metaEl.textContent = (clip.mentality || UNTAGGED_LABEL.toLowerCase()) + ' · ' + clip.moment +
-          (HypeAudio.normalizeTrim(clip, undefined) ? ' · trimmed' : '') + (cueEx ? ' · ' + cueEx : '');
+          (HypeAudio.normalizeTrim(clip, undefined) ? ' · trimmed' : '') + (cueEx ? ' · ' + cueEx : '') +
+          (pinnedBedTitle(clip) ? ' · over ' + pinnedBedTitle(clip) : '');
         info.appendChild(titleEl);
         info.appendChild(metaEl);
         const preview = HypeAudio.quotePreview(clip, 80);
@@ -1234,6 +1237,21 @@
           };
           dropdown.appendChild(cueItem);
         }
+        if (HypeAudio.isQuoteClip(clip)) {
+          const bedItem = document.createElement('button');
+          bedItem.className = 'menu-item menu-item-neutral';
+          bedItem.textContent = 'Background bed';
+          bedItem.onclick = function () {
+            dropdown.classList.remove('open');
+            const bedKey = 'bed:' + clip.id;
+            const openBed = openCueEdits.get(bedKey);
+            if (openBed) { openBed.host.remove(); openCueEdits.delete(bedKey); return; }
+            const host = buildBedPicker(clip, function () { host.remove(); openCueEdits.delete(bedKey); renderSection(key, mentality); }, function () { host.remove(); openCueEdits.delete(bedKey); });
+            openCueEdits.set(bedKey, { editor: { destroy: function () {} }, host: host });
+            list.insertBefore(host, row.nextSibling);
+          };
+          dropdown.appendChild(bedItem);
+        }
         dropdown.appendChild(delItem);
         menuBtn.onclick = function (e) {
           e.stopPropagation();
@@ -1255,6 +1273,8 @@
         // An editor left open survives the re-render (same DOM, same slider positions and preview).
         const openEdit = openCueEdits.get(clip.id);
         if (openEdit) list.appendChild(openEdit.host);
+        const openBedPick = openCueEdits.get('bed:' + clip.id);
+        if (openBedPick) list.appendChild(openBedPick.host);
       });
     }
 
@@ -1548,6 +1568,71 @@
     // ---- Own Cue Studio phase 1 (docs/superpowers/specs/2026-10-08-own-cue-studio-design.md) ----
     // Trim = two numbers on the clip's metadata; the audio file is never touched. Values are set with .value / .textContent only.
     let cueEditorSeq = 0;
+    // ---- Quote over a background bed (docs/superpowers/specs/2026-10-09-quote-over-bed-design.md) ----
+    function activeBeds() { return HypeAudio.listClips().filter(function (c) { return !c.deleted && HypeAudio.isBedClip(c); }); }
+    // The title of the pinned bed (only when it still resolves to an active bed); synced text, so callers use textContent only.
+    function pinnedBedTitle(clip) {
+      if (typeof clip.bed_id !== 'string') return '';
+      const b = activeBeds().filter(function (x) { return x.id === clip.bed_id; })[0];
+      return b && typeof b.title === 'string' ? b.title : '';
+    }
+    function buildBedPicker(clip, onDone, onCancel) {
+      const host = document.createElement('div');
+      host.className = 'cue-editor-host';
+      const wrap = document.createElement('div');
+      wrap.className = 'cue-editor';
+      const label = document.createElement('label');
+      const selId = 'bed-pick-' + (++cueEditorSeq);
+      label.htmlFor = selId;
+      label.textContent = 'Background bed';
+      const sel = document.createElement('select');
+      sel.id = selId;
+      sel.setAttribute('aria-label', 'Background bed');
+      const auto =document.createElement('option');
+      auto.value = '';
+      auto.textContent = 'Auto (same pillar and mood)';
+      sel.appendChild(auto);
+      activeBeds().forEach(function (b) {
+        const o = document.createElement('option');
+        o.value = b.id;
+        o.textContent = (typeof b.title === 'string' && b.title ? b.title : 'Untitled') + ' · ' + (b.pillar || '') + (b.mentality ? '/' + b.mentality : '');
+        sel.appendChild(o);
+      });
+      sel.value = typeof clip.bed_id === 'string' && activeBeds().some(function (b) { return b.id === clip.bed_id; }) ? clip.bed_id : '';
+      const save = document.createElement('button');
+      save.type = 'button';
+      save.className = 'record-btn';
+      save.textContent = 'Save';
+      save.onclick = function () { HypeAudio.setClipBed(clip.id, sel.value || null); onDone(); };
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'record-btn';
+      cancel.textContent = 'Cancel';
+      cancel.onclick = onCancel;
+      wrap.appendChild(label);
+      wrap.appendChild(sel);
+      wrap.appendChild(save);
+      wrap.appendChild(cancel);
+      host.appendChild(wrap);
+      return host;
+    }
+    // The on/off switch for quotes over a bed (a per-device preference, default on).
+    (function () {
+      const row = document.getElementById('quote-bed-row');
+      if (!row) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'moment-btn';
+      function paint() {
+        const on = HypeAudio.getQuoteBed();
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.textContent = 'Quotes over a bed: ' + (on ? 'on' : 'off');
+      }
+      btn.onclick = function () { HypeAudio.setQuoteBed(!HypeAudio.getQuoteBed()); paint(); };
+      paint();
+      row.appendChild(btn);
+    })();
     // Open "Edit cue" editors by clip id. A Map, not an object: ids come from the synced row.
     const openCueEdits = new Map();
     function formatClock(sec) {

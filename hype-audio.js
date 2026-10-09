@@ -535,6 +535,7 @@
   // never advances (onpause isn't wired to it), only a clip actually ending.
   function playSingle(clip, eventContext) {
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
+    bedStop();
     const audio = new Audio(clip.storage_url);
     currentAudio = audio;
     currentClipId = clip.id;
@@ -574,6 +575,7 @@
       if (finished) return;
       finished = true;
       if (audio !== currentAudio) return; // stale handler after a newer play started
+      bedQuoteEnded();
       currentClipId = null;
       advance();
     }
@@ -581,6 +583,7 @@
     watchTrim(audio, clip, finish);
     audio.onerror = function () {
       if (audio !== currentAudio) return;
+      bedStop();
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         alert('This clip isn\'t downloaded yet -- needs a connection to play for the first time.');
         // Stop cleanly rather than leave a "paused" now-playing bar whose
@@ -597,8 +600,60 @@
       advance();
     };
     audio.play().catch(function () {});
+    bedAttach(audio, clip);
     notifyChange();
     return audio;
+  }
+
+  // ---- Quote over a background bed (docs/superpowers/specs/2026-10-09-quote-over-bed-design.md) ----
+  // A quote is a motivational_speech clip; a bed is a music / instrumental / noise clip. The mixer lives in quote-bed.js (optional: when
+  // it is not loaded every quote simply plays alone, as before).
+  const BED_ROLES = ['music', 'instrumental', 'noise'];
+  const QUOTE_BED_KEY = 'hype_quote_bed';
+  function isBedClip(c) { return !!c && typeof c === 'object' && !c.deleted && BED_ROLES.indexOf(c.delivery_role) !== -1; }
+  function isQuoteClip(c) { return !!c && typeof c === 'object' && c.delivery_role === 'motivational_speech'; }
+  function getQuoteBed() { try { return localStorage.getItem(QUOTE_BED_KEY) !== '0'; } catch (e) { return true; } }
+  function setQuoteBed(on) { try { localStorage.setItem(QUOTE_BED_KEY, on ? '1' : '0'); } catch (e) {} }
+  function quoteBedMixer() {
+    if (typeof window !== 'undefined' && window.QuoteBed) return window.QuoteBed;
+    if (typeof globalThis !== 'undefined' && globalThis.QuoteBed) return globalThis.QuoteBed;
+    return null;
+  }
+  // The pinned bed (revalidated NOW: bed_id is synced, advisory data), else a random bed of the same pillar and mentality, else the
+  // same pillar, else none.
+  function pickBedFor(quote) {
+    if (!isQuoteClip(quote)) return null;
+    const beds = listActiveClips().filter(isBedClip);
+    if (!beds.length) return null;
+    if (typeof quote.bed_id === 'string') {
+      const pinned = beds.filter(function (b) { return b.id === quote.bed_id; })[0];
+      if (pinned) return pinned;
+    }
+    function pickFrom(list) { return list.length ? list[Math.floor(Math.random() * list.length)] : null; }
+    return pickFrom(beds.filter(function (b) { return b.pillar === quote.pillar && b.mentality === quote.mentality; })) ||
+      pickFrom(beds.filter(function (b) { return b.pillar === quote.pillar; }));
+  }
+  // Pins (or, with a falsy bedId, clears) a bed on a quote as one write. A bedId that is not an active bed is not stored.
+  function setClipBed(id, bedId) {
+    const clips = listClips();
+    const idx = clips.findIndex(function (c) { return c.id === id; });
+    if (idx === -1) return;
+    const next = Object.assign({}, clips[idx]);
+    delete next.bed_id;
+    if (typeof bedId === 'string' && listActiveClips().some(function (c) { return c.id === bedId && isBedClip(c); })) next.bed_id = bedId;
+    next.updated_at = Date.now();
+    clips[idx] = next;
+    saveClips(clips);
+  }
+  function bedStop() { try { const m = quoteBedMixer(); if (m) m.stop(); } catch (e) {} }
+  function bedQuoteEnded() { try { const m = quoteBedMixer(); if (m) m.quoteEnded(); } catch (e) {} }
+  function bedAttach(audio, clip) {
+    try {
+      const m = quoteBedMixer();
+      if (!m || !isQuoteClip(clip) || !getQuoteBed()) return;
+      const bed = pickBedFor(clip);
+      if (bed) m.attach(audio, bed.storage_url);
+    } catch (e) {}
   }
 
   function advance() {
@@ -689,6 +744,7 @@
     repeatClip = null;
     favoritesFilter = null;
     if (currentAudio) { try { currentAudio.pause(); } catch (e) {} }
+    bedStop();
     currentAudio = null;
     currentClipId = null;
     errorStreak = 0;
@@ -1073,6 +1129,12 @@
       normalizeTrim: normalizeTrim,
       normalizeExerciseName: normalizeExerciseName,
       setClipCue: setClipCue,
+      pickBedFor: pickBedFor,
+      setClipBed: setClipBed,
+      getQuoteBed: getQuoteBed,
+      setQuoteBed: setQuoteBed,
+      isBedClip: isBedClip,
+      isQuoteClip: isQuoteClip,
       watchTrim: watchTrim,
       restartCurrent: restartCurrent,
       secondsIntoCurrent: secondsIntoCurrent,
@@ -1133,6 +1195,12 @@
       normalizeTrim: normalizeTrim,
       normalizeExerciseName: normalizeExerciseName,
       setClipCue: setClipCue,
+      pickBedFor: pickBedFor,
+      setClipBed: setClipBed,
+      getQuoteBed: getQuoteBed,
+      setQuoteBed: setQuoteBed,
+      isBedClip: isBedClip,
+      isQuoteClip: isQuoteClip,
       watchTrim: watchTrim,
       restartCurrent: restartCurrent,
       secondsIntoCurrent: secondsIntoCurrent,

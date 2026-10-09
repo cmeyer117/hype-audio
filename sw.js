@@ -24,10 +24,17 @@ function stripRangeRequest(request) {
   return new Request(request.url, { method: request.method, headers: headers });
 }
 
+// A cached OPAQUE response (stored from an earlier no-cors audio request) cannot be used by a CORS-mode request: the quote-over-bed
+// mixer asks for beds with crossOrigin='anonymous', so such an entry is skipped and replaced by a fresh CORS fetch.
+function canServeCached(request, cached) {
+  if (!cached) return false;
+  return !(request.mode === 'cors' && cached.type === 'opaque');
+}
+
 function cacheFirst(request, cacheName) {
   return caches.open(cacheName).then(function (cache) {
     return cache.match(request).then(function (cached) {
-      if (cached) return cached;
+      if (canServeCached(request, cached)) return cached;
       return fetch(request).then(function (response) {
         if (response.ok) cache.put(request, response.clone());
         return response;
@@ -75,5 +82,5 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isAudioClipRequest: isAudioClipRequest, stripRangeRequest: stripRangeRequest };
+  module.exports = { isAudioClipRequest: isAudioClipRequest, stripRangeRequest: stripRangeRequest, canServeCached: canServeCached };
 }

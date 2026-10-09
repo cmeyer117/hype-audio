@@ -12,7 +12,7 @@ Source: Carl's idea, 2026-10-08: "pull some of the coolest quotes and speeches f
 
 ### Which clips are quotes and beds
 - A **quote** is a clip with `delivery_role === 'motivational_speech'`. A **bed** is a clip with `delivery_role` in `music`, `instrumental`, `noise`. Neither role is a new field.
-- New optional clip field `bed_id`: the id of a bed pinned to this quote. Written with `updateClip`, synced like every other field. It is normalised on read: it must be a string that matches an existing, non-deleted bed, otherwise it is ignored.
+- New optional clip field `bed_id`: the id of a bed pinned to this quote. Written with `updateClip`, synced like every other field. It is advisory playback metadata, never authorization: it is re-validated at the moment of use (a string that matches an existing, non-deleted clip whose `delivery_role` is a bed role), otherwise it is ignored. Whole-clip last-write-wins sync can resurrect a stale pin from another device; that costs at worst a different bed.
 
 ### Picking the bed (pure, in `hype-audio.js`: `pickBedFor(quote)`)
 1. The pinned `bed_id`, when it resolves to an active bed.
@@ -26,14 +26,19 @@ The bed is never the "current" clip, never enters the queue, never advances anyt
 
 ### Mixing (new `quote-bed.js`, loaded before `hype-audio.js`)
 - Only the **bed** is routed through WebAudio (`createMediaElementSource` into a `GainNode`), because iPhone Safari ignores `audio.volume`. The **quote** keeps playing on its own plain `Audio` element at full volume, untouched. If the bed's cross-origin route is silent or fails, the worst case is "no bed"; the quote is never affected.
-- The bed `Audio` is created with `crossOrigin = 'anonymous'`, `loop = true`, and goes through a gain envelope: start at 0, ramp to the **bed level 0.45** over 0.8 s, **duck to 0.18** when the quote's voice starts, **swell back to 0.45** when the quote ends, then fade to 0 over 1.2 s and stop. The bed starts 1.2 s before the quote's voice.
+- The bed `Audio` is created with `crossOrigin = 'anonymous'`, `loop = true`, and goes through a gain envelope: start at 0, ramp to the **bed level 0.45** over 0.8 s, **duck to 0.18** when the quote's voice starts, **swell back to 0.45** when the quote ends, then fade to 0 over 1.2 s and stop. There is no pre-roll: the bed starts together with the quote (delaying the quote would lose the iOS user-gesture window), already at the duck level, and rises to the bed level only after the quote ends.
 - The `AudioContext` is created lazily on the first quote start (that tap is the user gesture iOS requires) and reused. If `AudioContext` is missing, or `resume()` rejects, or the bed `Audio` fires `error`, the bed is dropped silently and the quote continues.
-- Lifecycle is bound to the quote's own `Audio` element, not to timers: quote `play` starts or resumes the bed, quote `pause` pauses it, quote `ended`, a trim end, a new `playSingle`, `stopPlayback()` or the clip being replaced stops it. Every stop is idempotent. There is at most one bed at a time; starting a new quote stops the previous bed first.
+- **Start inside the gesture.** `QuoteBed.attach` is called synchronously from `playSingle`, in the same call stack as the quote's own `play()`, and calls `resume()` and the bed's `play()` right there, not from an event handler. A rejected `bed.play()` (Safari can reject without firing `error`) or a rejected `resume()` is caught, logged with `console.warn`, and detaches that bed; the quote is unaffected.
+- **Generation token.** Every `attach` increments a generation number; every bed callback, timer and promise continuation compares its captured generation with the current one and does nothing when stale. This, not element identity alone, guarantees at most one bed and that nothing restarts after `stop()`.
+- Lifecycle is bound to the quote's own `Audio` element, not to timers: quote `play` resumes the bed, quote `pause` pauses it; quote `ended`, a new `playSingle`, `stopPlayback()` or the clip being replaced stops it. A trim end pauses the quote and then calls `finish()`, so the bed pauses first; `finish()` calls `QuoteBed.stop()` explicitly right after its stale check, so the trim end or natural end of the last clip in a queue never leaves a paused bed behind. Every stop is idempotent. There is at most one bed at a time; starting a new quote stops the previous bed first.
 - `playSingle` calls `QuoteBed.attach({ quoteAudio, bed, quoteClip })` right after creating the quote element, and `stopPlayback()` / the top of `playSingle` call `QuoteBed.stop()`. Nothing else in the playback code changes, so queue, repeat, media session, the mini-player and the trim end (`finish()`) behave exactly as today. The trim end already pauses the quote and calls `finish`; because the bed is bound to the quote's `pause` event it stops there too.
 
 ### Editing (index.html)
 - The "Edit cue" menu on a quote clip gets a **Background** field: a select listing the beds (grouped by pillar) plus "Auto". Saving writes `bed_id` (or removes it for "Auto") via `HypeAudio.setClipBed(id, bedId)` (validates and normalises like `setClipCue`; a `bed_id` for a clip that is not a bed is dropped).
 - A quote row shows "· over <bed title>" in its meta when pinned. All text is set with `textContent`; the bed title is synced data and is never put into an attribute selector or markup.
+
+### Service worker (`sw.js`)
+`cacheFirst` matches by URL only. A bed requested with `crossOrigin = 'anonymous'` is a CORS-mode request; if that URL was cached earlier from a plain no-cors audio request, the cached response is **opaque** and a CORS request cannot use it (the bed would be silent or error). Fix: in `cacheFirst`, when the incoming request's `mode` is `'cors'` and the cached response's `type` is `'opaque'`, ignore the cached entry, fetch, and replace it. `sw.selfcheck.js` gets a case for this. (The Range-stripping rebuild in `stripRangeRequest` already produces CORS-mode requests, so most entries are already CORS responses.)
 
 ## Failure modes handled
 - No bed in the library, bed deleted, `bed_id` pointing at a non-bed: quote plays alone.
@@ -64,5 +69,5 @@ The bed is never the "current" clip, never enters the queue, never advances anyt
 ## Tasks
 1. `quote-bed.js` (pure envelope math + the attach/stop controller) + `quote-bed.selfcheck.js` (tests 2, 3, 5).
 2. `hype-audio.js`: `pickBedFor`, `setClipBed`, `getQuoteBed` / `setQuoteBed`, the two call sites in `playSingle` / `stopPlayback` (tests 1, 4, 6).
-3. `index.html`: settings switch, Edit cue Background select, meta text; script tag order; service-worker shell list if it lists scripts.
+3. `index.html`: settings switch, Edit cue Background select, meta text; script tag order; `sw.js` cacheFirst opaque-response guard + a `sw.selfcheck.js` case.
 4. Browser verification, Codex review of the diff, inline `/code-review`, push, handoff.

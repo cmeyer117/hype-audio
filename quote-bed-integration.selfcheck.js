@@ -137,8 +137,12 @@ const bedUrls = () => FakeAudio.instances.filter((a) => /bed/.test(a.src)).map((
   // ---- setting off / no mixer / mixer failures: the quote plays exactly as before ----
   reset();
   H.addClip(bed({ id: 'b1', storage_url: 'https://x/bed-1.mp3' })); H.addClip(quote({ id: 'q1', storage_url: 'https://x/q1.mp3' }));
+  H.playClip(H.listClips().find((c) => c.id === 'q1'));
+  eq(ctl.isActive(), true, 'a bed is playing');
   H.setQuoteBed(false);
+  eq(ctl.isActive(), false, 'turning the setting off stops the bed that is playing right now');
   eq(H.getQuoteBed(), false, 'setting reads back off');
+  FakeAudio.instances.length = 0;
   H.playClip(H.listClips().find((c) => c.id === 'q1'));
   eq([bedUrls().length, ctl.isActive()], [0, false], 'setting off: no bed');
   H.setQuoteBed(true);
@@ -154,6 +158,16 @@ const bedUrls = () => FakeAudio.instances.filter((a) => /bed/.test(a.src)).map((
   try { solo3 = H.playClip(H.listClips().find((c) => c.id === 'q1')); solo3.fire('ended'); H.stopPlayback(); } catch (e) { threw = true; }
   eq(threw, false, 'a mixer that throws can never break playback');
   installMixer();
+
+  // ---- a rejected quote play() takes its bed down with it ----
+  reset();
+  H.addClip(bed({ id: 'b1', storage_url: 'https://x/bed-1.mp3' })); H.addClip(quote({ id: 'q1', storage_url: 'https://x/rejq.mp3' }));
+  const origPlay = FakeAudio.prototype.play;
+  FakeAudio.prototype.play = function () { if (/rejq/.test(this.src)) { this.paused = true; return Promise.reject(new Error('NotAllowedError')); } return origPlay.call(this); };
+  H.playClip(H.listClips().find((c) => c.id === 'q1'));
+  await new Promise((r) => setImmediate(r));
+  eq(ctl.isActive(), false, 'the quote could not start, so its bed is stopped too');
+  FakeAudio.prototype.play = origPlay;
 
   // ---- a quote in a queue: the bed follows each quote, one at a time ----
   reset();

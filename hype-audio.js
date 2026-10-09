@@ -599,7 +599,8 @@
       if (errorStreak >= 5) { stopPlayback(); return; }
       advance();
     };
-    audio.play().catch(function () {});
+    // A rejected quote play() (blocked, offline, bad url) must not leave its bed playing alone.
+    audio.play().catch(function () { if (audio === currentAudio) bedStop(); });
     bedAttach(audio, clip);
     notifyChange();
     return audio;
@@ -613,7 +614,10 @@
   function isBedClip(c) { return !!c && typeof c === 'object' && !c.deleted && BED_ROLES.indexOf(c.delivery_role) !== -1; }
   function isQuoteClip(c) { return !!c && typeof c === 'object' && c.delivery_role === 'motivational_speech'; }
   function getQuoteBed() { try { return localStorage.getItem(QUOTE_BED_KEY) !== '0'; } catch (e) { return true; } }
-  function setQuoteBed(on) { try { localStorage.setItem(QUOTE_BED_KEY, on ? '1' : '0'); } catch (e) {} }
+  function setQuoteBed(on) {
+    try { localStorage.setItem(QUOTE_BED_KEY, on ? '1' : '0'); } catch (e) {}
+    if (!on) bedStop(); // turning it off also quiets a bed that is playing right now
+  }
   function quoteBedMixer() {
     if (typeof window !== 'undefined' && window.QuoteBed) return window.QuoteBed;
     if (typeof globalThis !== 'undefined' && globalThis.QuoteBed) return globalThis.QuoteBed;

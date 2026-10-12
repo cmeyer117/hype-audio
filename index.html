@@ -14,7 +14,7 @@
     --bg-card: #111113;
     --text-primary: #F4F1EA; --text-secondary: rgba(244,241,234,0.6); --text-tertiary: rgba(244,241,234,0.4);
     --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.16);
-    --mindset: #8E7CF0; --iron: #E0332F; --faith: #C9A227; --carl: #E0812F; --danger: #ff8a8a;
+    --mindset: #8E7CF0; --iron: #E0332F; --faith: #C9A227; --carl: #E0812F; --speeches: #2FB5C9; --danger: #ff8a8a;
     --font: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-serif: 'Instrument Serif', Georgia, serif;
     --font-mono: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -345,6 +345,7 @@
           <option value="iron">Iron</option>
           <option value="faith">Faith</option>
           <option value="carl">Carl</option>
+          <option value="speeches">Speeches</option>
         </select>
         <select id="moment-input" aria-label="Moment">
           <option value="pre_workout">Pre-workout</option>
@@ -497,8 +498,9 @@
       iron:    { label: 'Iron',    emoji: '🔥', color: 'var(--iron)' },
       faith:   { label: 'Faith',   emoji: '✝️', color: 'var(--faith)' },
       carl:    { label: 'Carl',    emoji: '🎙️', color: 'var(--carl)' },
+      speeches: { label: 'Speeches', emoji: '📣', color: 'var(--speeches)', noPhotos: true }, // no tile photos yet: gradient only
     };
-    const PILLAR_ORDER = ['mindset', 'iron', 'faith', 'carl'];
+    const PILLAR_ORDER = ['mindset', 'iron', 'faith', 'carl', 'speeches'];
     // carl's home-tile images are real photos saved as .jpg; the rest are
     // ChatGPT-generated .png -- mismatched extension/content-type silently
     // fails to decode on iOS Safari, so this has to be exact per pillar.
@@ -611,15 +613,17 @@
         // Carl's tile is a real face, not a mood shot -- splitting it into
         // 4 tiny quarter-panels leaves nothing recognizable at real tile
         // size. One full photo instead; the other pillars keep the grid.
-        const panelCount = key === 'carl' ? 1 : 4;
+        const panelCount = (key === 'carl' || meta.noPhotos) ? 1 : 4;
         for (let n = 1; n <= panelCount; n++) {
           const cell = document.createElement('div');
           cell.className = 'tile-panel';
           if (panelCount === 1) { cell.style.gridColumn = '1 / -1'; cell.style.gridRow = '1 / -1'; }
           cell.style.backgroundImage = 'linear-gradient(160deg, rgba(255,255,255,0.06), #0a0a0b 70%)';
-          const img = new Image();
-          img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };
-          img.src = 'images/home/' + key + '-' + n + '.' + heroImgExt(key);
+          if (!meta.noPhotos) {
+            const img = new Image();
+            img.onload = function () { cell.style.backgroundImage = "url('" + img.src + "')"; };
+            img.src = 'images/home/' + key + '-' + n + '.' + heroImgExt(key);
+          }
           panels.appendChild(cell);
         }
         tile.onclick = function () { showSubcats(key); };

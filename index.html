@@ -711,7 +711,7 @@
       const meta = PILLARS[key];
       document.getElementById('subcat-title').textContent = meta.label;
       document.getElementById('subcat-title').style.color = meta.color;
-      document.getElementById('page-bg').style.backgroundImage = "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
+      document.getElementById('page-bg').style.backgroundImage = meta.noPhotos ? 'none' : "url('images/home/" + key + "-1." + heroImgExt(key) + "')";
 
       const randomBtn = document.getElementById('subcat-random-play');
       const randomActive = HypeAudio.isPlayingRandomFilter({ pillar: key });

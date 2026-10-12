@@ -27,6 +27,11 @@ assert.ok(select, 'pillar-input select not found');
 const options = [...select[0].matchAll(/<option value="([a-z]+)"/g)].map(m => m[1]);
 for (const k of keys) assert.ok(options.includes(k), `upload form pillar dropdown is missing ${k}`);
 
+// A pillar flagged noPhotos has no images/home/<key>-N files: neither the home tile nor the subcategory page may request them.
+assert.ok(/noPhotos: true/.test(meta[1]), 'speeches should be flagged noPhotos while it has no tile photos');
+assert.ok(/meta\.noPhotos \? 'none'/.test(html), 'renderSubcats must skip the hero image for a noPhotos pillar');
+assert.ok(/if \(!meta\.noPhotos\)/.test(html), 'the home tile must skip the photo load for a noPhotos pillar');
+
 // hype-audio.js: no automatic picker may reach into speeches.
 assert.ok(!/pillar:\s*(?:\[[^\]]*'speeches'|'speeches')/.test(lib), "an automatic picker in hype-audio.js names the 'speeches' pillar");
 

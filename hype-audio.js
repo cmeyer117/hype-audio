@@ -152,7 +152,8 @@
     return function (c) {
       return (!filter.mentality || c.mentality === filter.mentality) &&
         (!filter.moment || c.moment === filter.moment) &&
-        (!pillars || pillars.indexOf(c.pillar) !== -1) &&
+        // Speeches are opened by hand: a filter that names no pillar (the auto mid-set / PR pickers) never reaches them.
+        (pillars ? pillars.indexOf(c.pillar) !== -1 : c.pillar !== 'speeches') &&
         (!filter.useCase || c.use_case === filter.useCase) &&
         (!deliveryRoles || deliveryRoles.indexOf(c.delivery_role) !== -1);
     };

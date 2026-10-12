@@ -629,6 +629,14 @@ const eventsAfterFuture = HypeAudio.listHypeEvents();
 assertEqual(eventsAfterFuture.some((e) => e.id === 'future1'), false, 'a future-dated event is dropped even though its age-diff would pass retention');
 assertEqual(eventsAfterFuture.length, 1, 'only the newly logged event survives once the future-dated one is pruned');
 
+// Speeches pillar (2026-10-12): opened by hand only. A filter that names no pillar (the auto mid-set / PR pickers) must never return one,
+// while an explicit pillar:'speeches' filter still finds it.
+HypeAudio.addClip({ id: 'speech1', title: 'Noon', mentality: 'speechtest-charge', moment: 'speechtest-moment', pillar: 'speeches', delivery_role: 'motivational_speech', play_count: 0 });
+assertEqual(HypeAudio.pickRandom({ moment: 'speechtest-moment' }), null, 'pickRandom with no pillar never returns a speeches clip');
+assertEqual(HypeAudio.pickRandom({ mentality: 'speechtest-charge' }), null, 'pickRandom(mentality only) never returns a speeches clip');
+assertEqual(HypeAudio.pickRandom({ pillar: 'speeches' }).id, 'speech1', 'pickRandom(pillar:speeches) still finds it');
+assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'speechtest-charge' }).id, 'speech1', 'a pillar list that includes speeches finds it');
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

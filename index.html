@@ -530,7 +530,7 @@
         HypeAudio.migrateMentalityCasing();
         HypeAudio.migrateGogginsToMindset();
         HypeAudio.migrateCarlToOwnPillar();
-        if (typeof handleDeepLink === 'function') handleDeepLink();
+        handleDeepLink();
         renderHome();
         if (currentMentality) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
@@ -1421,11 +1421,13 @@
     function handleDeepLink() {
       if (deepLinkHandled || !appReady) return;
       const target = HypeAudio.resolveDeepLink(location.search, HypeAudio.listActiveClips());
-      if (!target) return;
+      if (!target || !Object.hasOwn(PILLARS, target.pillar)) return;
       deepLinkHandled = true;
       deepLinkClipId = target.id;
-      if (!target.mentality) { showSubcats(target.pillar); return; }
-      showSection(target.pillar, target.mentality);
+      try {
+        if (!target.mentality) { showSubcats(target.pillar); return; }
+        showSection(target.pillar, target.mentality);
+      } catch (e) { return; } // never let the deep link break the page or the sync callback that may have called it
       // The clip-art manifest arrives a moment later and re-renders the section (rows get re-marked from deepLinkClipId as they are
       // built), so scroll once that has had time to settle.
       setTimeout(function () {

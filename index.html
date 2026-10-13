@@ -154,6 +154,7 @@
   }
 
   #clip-list { display: flex; flex-direction: column; }
+  .clip[data-deeplinked="true"] { outline: 2px solid var(--speeches, #2FB5C9); outline-offset: 2px; }
   .clip {
     background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -529,6 +530,7 @@
         HypeAudio.migrateMentalityCasing();
         HypeAudio.migrateGogginsToMindset();
         HypeAudio.migrateCarlToOwnPillar();
+        if (typeof handleDeepLink === 'function') handleDeepLink();
         renderHome();
         if (currentMentality) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
@@ -1133,6 +1135,8 @@
       clips.forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
+        row.dataset.clipId = clip.id;
+        if (deepLinkClipId === clip.id) row.dataset.deeplinked = 'true';
         const thumb = document.createElement('img');
         thumb.className = 'clip-thumb';
         thumb.alt = '';
@@ -1409,6 +1413,26 @@
     HypeAudio.migrateGogginsToMindset();
     HypeAudio.migrateCarlToOwnPillar();
 
+    // Deep link from Vision's "Open in Hype": /?clip=<id> opens that clip's screen and highlights its row. Never plays anything.
+    // Tried on load and once more after the first cloud sync, because the clip may only arrive with the sync.
+    var deepLinkHandled = false; // var, not let: the sync callback above can fire before this line runs
+    var deepLinkClipId = null;
+    var appReady = false; // set at the very end of the page script: renderSection needs every const declared above it
+    function handleDeepLink() {
+      if (deepLinkHandled || !appReady) return;
+      const target = HypeAudio.resolveDeepLink(location.search, HypeAudio.listActiveClips());
+      if (!target) return;
+      deepLinkHandled = true;
+      deepLinkClipId = target.id;
+      if (!target.mentality) { showSubcats(target.pillar); return; }
+      showSection(target.pillar, target.mentality);
+      // The clip-art manifest arrives a moment later and re-renders the section (rows get re-marked from deepLinkClipId as they are
+      // built), so scroll once that has had time to settle.
+      setTimeout(function () {
+        const row = document.querySelector('#clip-list .clip[data-deeplinked="true"]');
+        if (row) row.scrollIntoView({ block: 'center' });
+      }, 400);
+    }
     // record-your-own: hide the whole block if this browser/context can't
     // actually record (MediaRecorder can exist as a constructor while mic
     // capture itself is unavailable, e.g. some restricted WebViews).
@@ -1970,6 +1994,8 @@
     })();
 
     showHome();
+    appReady = true;
+    handleDeepLink();
   </script>
 </body>
 </html>

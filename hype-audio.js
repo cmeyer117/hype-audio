@@ -209,6 +209,17 @@
     });
   }
 
+  // "Open in Hype" deep link (the Vision connector, 2026-10-13): /?clip=<id> names a clip to open. Pure: returns where it lives
+  // ({ pillar, mentality, id }) or null for no param, an unknown id, a deleted clip, or a clip with no pillar. It never plays anything.
+  function resolveDeepLink(search, clips) {
+    if (typeof search !== 'string' || !Array.isArray(clips)) return null;
+    const id = new URLSearchParams(search).get('clip');
+    if (!id) return null;
+    const clip = clips.find(function (c) { return c && c.id === id && !c.deleted; });
+    if (!clip || typeof clip.pillar !== 'string' || !clip.pillar) return null;
+    return { pillar: clip.pillar, mentality: typeof clip.mentality === 'string' ? clip.mentality : '', id: clip.id };
+  }
+
   // Same first-segment-style truncation the migration uses for
   // suggested_title, applied here to transcript_text for the per-row
   // preview -- consistent presentation between the two.
@@ -1127,6 +1138,7 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       searchClips: searchClips,
+      resolveDeepLink: resolveDeepLink,
       quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,
@@ -1193,6 +1205,7 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       searchClips: searchClips,
+      resolveDeepLink: resolveDeepLink,
       quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,
       AUTO_PLAY_HYPE: AUTO_PLAY_HYPE,

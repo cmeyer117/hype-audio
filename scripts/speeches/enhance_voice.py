@@ -25,8 +25,10 @@ def enhance(wav_in: Path, mp3_out: Path):
     y *= 0.89 / (np.max(np.abs(y)) + 1e-9)
     tmp = mp3_out.with_suffix(".eq.wav")
     wavfile.write(tmp, SR, (y * 32767).astype("<i2"))
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(tmp), "-af", CHAIN, "-ar", "44100", "-b:a", "160k", str(mp3_out)], check=True)
-    tmp.unlink()
+    try:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(tmp), "-af", CHAIN, "-ar", "44100", "-b:a", "160k", str(mp3_out)], check=True)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,11 @@
-// Renders the 7 original hype lines with local Kokoro (zero cost) to mp3s in ./speeches-audio.
-// Usage: node render-lines.mjs [voice]
+// Renders the historic speeches (hist-speeches.json) with local Kokoro `bm_george` (zero cost) to wav + json in ./speeches-george-wav.
+// Next steps: `python -I enhance_voice.py speeches-george-wav speeches-hist-dry`, then mix_hist.py. Voice is fixed (Carl's pick);
+// per-speech speed comes from hist-speeches.json.
 import fs from 'node:fs'
 import path from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const voice = process.argv[2] || 'am_michael'
 const out = path.join(here, 'speeches-george-wav')
 fs.mkdirSync(out, { recursive: true })
 
@@ -42,7 +41,6 @@ for (const l of lines) {
   let o = 0
   for (const p of parts) { all.set(p, o); o += p.length }
   const wav = path.join(out, `speech-${l.n}.wav`)
-  const mp3 = path.join(out, `speech-${l.n}.mp3`)
   fs.writeFileSync(wav, wavBuffer(all, rate))
   fs.writeFileSync(path.join(out, `speech-${l.n}.json`), JSON.stringify({ n: l.n, title: l.title, reflect, seconds: Math.round(total / rate), text: l.text.join('\n') }))
   console.log(l.n, l.title, reflect ? 'reflect' : 'charge', Math.round(total / rate) + 's')

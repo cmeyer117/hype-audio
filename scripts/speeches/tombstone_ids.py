@@ -32,4 +32,6 @@ stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S
 body = json.dumps({"key": "hype-audio", "data": {**row["data"], "hype_audio": clips}, "updated_at": stamp}).encode()
 res = call("PATCH", "/rest/v1/app_state?key=eq.hype-audio&updated_at=eq." + urllib.parse.quote(token), body,
            {"Content-Type": "application/json", "Prefer": "return=representation"})
-print("written" if res else "CONFLICT, nothing written")
+if not res:
+    sys.exit("CONFLICT: row changed since read; nothing written. Re-run.")
+print("written")

@@ -1,5 +1,7 @@
-"""Push the 7 original Kokoro speeches into hype-audio's Speeches pillar. Dry run unless --apply.
-CAS write on app_state.updated_at; ids are deterministic so a re-run skips clips already present."""
+"""Push rendered speeches (speech-N.mp3 + speech-N.json in <dir>) into hype-audio's Speeches pillar as clip_speeches_<prefix>_<N>.
+Usage: python -I push_speeches.py <dir> <prefix> [--apply]  (dry run unless --apply).
+Uploads happen before the CAS write on app_state.updated_at, so a conflict leaves the mp3s in Storage but appends nothing; re-run.
+Ids are deterministic, so a re-run skips clips already present."""
 import json, re, sys, time, urllib.request, urllib.parse, datetime
 from pathlib import Path
 

@@ -2,7 +2,7 @@
 
 How the five historic Speeches clips are produced (all local, zero cost except the free, unofficial Edge TTS endpoint).
 
-1. `hist-speeches.json`: the speeches (public-domain text), split into spoken lines, with `reflect` flag.
+1. `hist-speeches.json`: the speeches (public-domain text), split into spoken lines, with `reflect` flag. Its per-speech `voice`/`speed` fields apply only to the Kokoro renderer (`render-hist.mjs`); `render_edge.py` has its own `VOICE` map and rate/pitch.
 2. Voice: `render_edge.py [n ...]` renders with Edge neural TTS (`pip install edge-tts`; voice `en-GB-RyanNeural`; charge = rate -8% / pitch -3Hz, reflect = -12% / -2Hz, controlled pauses between lines). Earlier Kokoro version: `render-hist.mjs` (kokoro-js, voices bm_george/bm_fable/am_fenrir).
 3. Bed: `make_bed.py <out.wav> <seconds> <intense|dark>` synthesizes a sub drone + dark pad + 66 BPM war drums + risers (intense) or the drumless version (dark). Charge speeches use intense, reflect use dark.
 4. Mix: `mix_hist.py` (ffmpeg: EQ, compressor, sidechain-ducked bed, loudnorm -16 LUFS) writes `speeches-hist/speech-N.mp3`.

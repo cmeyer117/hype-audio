@@ -26,6 +26,7 @@ async def line_audio(text, voice, rate, pitch, tmp, k):
             a = decode(p)
             if len(a) > SR * 0.2:
                 return a
+            print("retry", k, f"audio too short ({len(a) / SR:.2f}s)")
         except Exception as e:  # noqa: BLE001
             print("retry", k, e)
     raise SystemExit(f"edge-tts failed for line {k}: {text[:40]}")

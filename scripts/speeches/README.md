@@ -12,4 +12,6 @@ Use a NEW id prefix for every re-render: the service worker caches clip files by
 
 Scripts expect to run from a native `C:\` folder (not the Drive path) and read the service-role key from `C:\Users\gregm\jarvis-embed\.env`; no secret is stored here. Voice and mix history (Kokoro, Edge William, Edge Ryan) is archived in `Claude Outputs/speeches-voice-history/`.
 
-Live ids (2026-10-13): `clip_speeches_hist2_1..3` and `clip_speeches_hist3_4..5`.
+**Current voice (2026-10-13): Kokoro `bm_george` + enhancement**, Carl's pick: `node render-george.mjs` (all five, keeps wavs), `python -I enhance_voice.py <wav dir> <out dir>` (EQ-match FIR from `bm_george-eq-curve.json`, then highpass, afftdn, compressor, exciter), then `mix_hist.py` and `push_speeches.py`. The Edge Ryan path (`render_edge.py`) stays as the alternative. Full write-up: vault note `10 - AI & Tech Knowledge/Voices in Apps - Kokoro, Edge TTS and Enhancement.md`.
+
+Live ids (2026-10-13): `clip_speeches_hist4_1..5` (George, enhanced). Superseded: `hist` (Kokoro mixed voices), `hist2`/`hist3` (Edge Ryan), all tombstoned.

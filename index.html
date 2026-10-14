@@ -1344,7 +1344,7 @@
 
     // Shared by both upload forms (clip-list screen has a fixed mentality;
     // subcat screen lets you type a brand-new one that has no tile yet).
-    async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput) {
+    async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput, metadata) {
       const file = fileInput.files[0];
       // Normalized to lowercase -- mentality is the grouping key for subcat
       // tiles and random filters, so "Goggins" and "goggins" would otherwise
@@ -1366,8 +1366,8 @@
           pillar: pillar,
           moment: moment,
           source_type: source,
-          use_case: document.getElementById('use-case-input').value || null,
-          delivery_role: document.getElementById('delivery-role-input').value || null,
+          use_case: metadata.useCase || null,
+          delivery_role: metadata.deliveryRole || null,
           storage_url: url,
           created_at: new Date().toISOString(),
           play_count: 0,
@@ -1386,7 +1386,8 @@
         document.getElementById('moment-input').value,
         document.getElementById('source-input').value,
         document.getElementById('file-input'),
-        document.getElementById('title-input')
+        document.getElementById('title-input'),
+        { useCase: document.getElementById('use-case-input').value, deliveryRole: document.getElementById('delivery-role-input').value }
       );
       document.getElementById('pillar-input').value = currentPillar;
       document.getElementById('mentality-input').value = currentMentality;
@@ -1401,7 +1402,8 @@
         document.getElementById('sc-moment-input').value,
         document.getElementById('sc-source-input').value,
         document.getElementById('sc-file-input'),
-        document.getElementById('sc-title-input')
+        document.getElementById('sc-title-input'),
+        { useCase: null, deliveryRole: null }
       );
       renderSubcats(currentPillar);
     });

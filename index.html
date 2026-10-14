@@ -516,7 +516,7 @@
       .then(function (r) { return r.json(); })
       .then(function (manifest) {
         CLIP_ART_MANIFEST = manifest;
-        if (currentMentality) renderSection(currentPillar, currentMentality);
+        if (currentMentality !== null) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
       })
       .catch(function () {});
@@ -532,7 +532,7 @@
         HypeAudio.migrateCarlToOwnPillar();
         handleDeepLink();
         renderHome();
-        if (currentMentality) renderSection(currentPillar, currentMentality);
+        if (currentMentality !== null) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
       },
       onStatusChange: function (status, lastSyncedAt) {
@@ -1337,7 +1337,7 @@
     // once a clip ends, without polling).
     HypeAudio.onPlaybackChange(function () {
       renderNowPlaying();
-      if (currentMentality) renderSection(currentPillar, currentMentality);
+      if (currentMentality !== null) renderSection(currentPillar, currentMentality);
       else if (currentPillar) renderSubcats(currentPillar);
       else renderHome();
     });
@@ -1892,7 +1892,7 @@
           // A pillar-less/mentality-less legacy clip (this app has always
           // supported that shape -- see hype-audio.selfcheck.js's own
           // "unmigrated legacy shape" test) would crash showSection().
-          if (clip && clip.pillar && clip.mentality) showSection(clip.pillar, clip.mentality);
+          if (clip && Object.hasOwn(PILLARS, clip.pillar)) showSection(clip.pillar, clip.mentality || '');
         };
       });
     });

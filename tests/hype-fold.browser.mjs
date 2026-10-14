@@ -43,6 +43,14 @@ check('metadata',async page=>{
  const saved=await page.evaluate(()=>HypeAudio.listActiveClips().find(c=>c.title==='Fixture upload'));
  assert.equal(saved.use_case,null,'subcategory must not inherit hidden study_focus');assert.equal(saved.delivery_role,null,'subcategory must not inherit hidden noise');
 });
+check('untagged',async page=>{
+ await page.locator('#global-search-input').fill('Fixture untagged');await page.locator('.search-result').click();
+ assert.equal(await page.locator('#view-section').isVisible(),true,'blank mentality search must open its section');
+ assert.ok((await page.locator('#section-title').innerText()).includes('Untagged'));
+ assert.equal(await page.locator('#clip-list').getByText('Fixture untagged',{exact:true}).count(),1);
+ await page.evaluate(()=>cloudFixture.onApplied());
+ assert.equal(await page.locator('#clip-list').getByText('Fixture untagged',{exact:true}).count(),1,'cloud refresh keeps untagged section');
+});
 const browser=await chromium.launch({channel:'msedge'});let failures=0,passed=0;
 try{for(const c of cases.filter(c=>!process.argv[2]||c.name===process.argv[2])){const{page,errors}=await fixture(browser);try{await c.run(page);assert.deepEqual(errors,[]);console.log('PASS '+c.name);passed++;}catch(e){failures++;console.error('FAIL '+c.name+': '+e.message);}finally{await page.close();}}}finally{await browser.close();}
 console.log(`Edge375×812: ${passed} passed, ${failures} failed`);process.exitCode=failures?1:0;

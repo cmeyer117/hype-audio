@@ -142,7 +142,7 @@
   /* Own Cue Studio (spec 2026-10-08): trim + exercise editor */
   .cue-editor { display: flex; flex-direction: column; gap: 12px; padding: 10px 0; }
   .cue-editor .field { display: flex; flex-direction: column; gap: 6px; }
-  .cue-editor input[type="range"] { width: 100%; min-height: 32px; }
+  .cue-editor input[type="range"] { width: 100%; min-height: 44px; }
   .cue-editor .cue-readout { font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary); }
   .cue-editor .cue-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .cue-editor .cue-actions button { min-height: 44px; }
@@ -252,16 +252,57 @@
   }
   .tab .tab-emoji { font-size: 16px; }
   .tab.active { color: var(--text-primary); background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
+  .home-tools { display:flex; justify-content:flex-end; gap:10px; margin-bottom:14px; }
+  .home-tools button, .search-play, .search-open, dialog button { padding:12px; border:1px solid var(--border-strong); border-radius:10px; background:var(--bg-card); color:var(--text-primary); font:inherit; cursor:pointer; }
+  dialog { box-sizing:border-box; width:min(620px, calc(100% - 24px)); max-height:85dvh; overflow:auto; padding:16px; border:1px solid var(--border-strong); border-radius:16px; background:var(--bg-card); color:var(--text-primary); }
+  dialog::backdrop { background:rgba(0,0,0,.75); }
+  dialog .back-row { justify-content:space-between; }
+  dialog input, dialog select { box-sizing:border-box; }
+  dialog details > .field, dialog details > select, dialog details > .cue-editor { margin:10px 0; }
+  #quick-play h2, #library-block h2, #week-block h2 { font-size:18px; margin:18px 0 12px; }
+  #focus-details { border:1px solid var(--border); border-radius:14px; margin-bottom:20px; }
+  #focus-details h3 { margin:12px 16px 0; font-size:15px; }
+  #quick-play .moment-row { flex-wrap:wrap; margin-bottom:12px; }
+  #quick-play .moment-btn { flex:1 1 100px; }
+  .search-result { flex-wrap:wrap; }
+  .search-result .clip-info { flex:1 0 100%; }
+  .search-result .search-play { text-align:left; }
+  .search-result .search-play span { display:block; }
+  button, input, select, summary { min-width:44px; min-height:44px; box-sizing:border-box; }
+  :focus-visible { outline:3px solid #fff; outline-offset:3px; }
+  .clip { flex-wrap:wrap; }
+  .clip .clip-info { min-width:0; flex:1 1 140px; }
+  .clip .clip-actions { flex:1 0 100%; justify-content:flex-end; flex-wrap:wrap; }
+  .nowplaying-explain-text { min-width:0; }
+  #record-preview-audio { min-height:54px; }
+  #sync-status-indicator { background:transparent; border:0; text-align:left; padding:0; }
+  body { padding-bottom:calc(var(--player-clearance, 240px) + 24px + env(safe-area-inset-bottom)); }
 </style>
 </head>
 <body>
 <div class="page-bg" id="page-bg"></div>
 <div class="page">
 
+  <header class="home-tools">
+    <button type="button" id="open-add">Add <span id="add-pending"></span></button>
+    <button type="button" id="open-curate">Curate <span id="curate-pending"></span></button>
+  </header>
+  <dialog id="add-dialog" aria-labelledby="add-heading">
+    <div class="back-row"><h2 id="add-heading">Add</h2><button type="button" id="close-add">Close Add</button></div>
+    <p>Upload or record. Classification is optional; recordings belong to Carl.</p>
+    <div id="add-forms"></div>
+    <p id="record-unavailable" hidden>Recording is unavailable in this browser. Upload an audio file instead.</p>
+  </dialog>
+  <dialog id="curate-dialog" aria-labelledby="curate-heading">
+    <div class="back-row"><h2 id="curate-heading">Curate</h2><button type="button" id="close-curate">Close Curate</button></div>
+    <div id="curate-entrances"></div>
+    <details id="mentality-curate"><summary>Mentalities <span id="mentality-pending"></span></summary><div id="mentality-curate-host"></div></details>
+  </dialog>
+
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
-    <div id="sync-status-indicator" style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></div>
+    <button type="button" id="sync-status-indicator" disabled style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></button>
     <input type="search" id="global-search-input" aria-label="Search everything you've said" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
@@ -273,8 +314,8 @@
     <div class="moment-row" id="cues-row"></div>
     <div class="moment-row" id="quote-bed-row"></div>
 
-    <details id="focus-details">
-      <summary>Focus</summary>
+    <section id="focus-details" aria-label="Focus">
+      <h3>Focus</h3>
       <div id="focus-setup" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px;">
         <div class="moment-row" id="focus-duration-row"></div>
         <div class="moment-row" id="focus-sound-row"></div>
@@ -292,7 +333,7 @@
           <button type="button" class="moment-btn" id="focus-outcome-skip">Skip</button>
         </div>
       </div>
-    </details>
+    </section>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -461,13 +502,13 @@
     <div class="nowplaying" id="nowplaying" style="display:none">
       <div class="nowplaying-row">
         <span class="nowplaying-title" id="nowplaying-title"></span>
-        <button class="nowplaying-btn" id="nowplaying-toggle" type="button">⏸</button>
-        <button class="nowplaying-btn" id="nowplaying-stop" type="button">■</button>
+        <button class="nowplaying-btn" id="nowplaying-toggle" type="button" aria-label="Pause playback">⏸</button>
+        <button class="nowplaying-btn" id="nowplaying-stop" type="button" aria-label="Stop playback">■</button>
       </div>
       <div class="nowplaying-explain">
         <span class="nowplaying-explain-text" id="nowplaying-explain-text"></span>
-        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-up" type="button" title="More like this">👍</button>
-        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-down" type="button" title="Less like this">👎</button>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-up" type="button" title="More like this" aria-label="More like this">👍</button>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-down" type="button" title="Less like this" aria-label="Less like this">👎</button>
       </div>
     </div>
     <div class="tabbar-inner" id="tabbar-inner"></div>
@@ -516,7 +557,7 @@
       .then(function (r) { return r.json(); })
       .then(function (manifest) {
         CLIP_ART_MANIFEST = manifest;
-        if (currentMentality) renderSection(currentPillar, currentMentality);
+        if (currentMentality !== null) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
       })
       .catch(function () {});
@@ -532,7 +573,7 @@
         HypeAudio.migrateCarlToOwnPillar();
         handleDeepLink();
         renderHome();
-        if (currentMentality) renderSection(currentPillar, currentMentality);
+        if (currentMentality !== null) renderSection(currentPillar, currentMentality);
         else if (currentPillar) renderSubcats(currentPillar);
       },
       onStatusChange: function (status, lastSyncedAt) {
@@ -544,6 +585,7 @@
         // Signed out: the indicator becomes the sign-in button (playback never waits on this).
         const tappable = status === 'signedout' && window.HypeAuth;
         el.onclick = tappable ? function () { window.HypeAuth.showLogin(); } : null;
+        el.disabled = !tappable;
         el.style.cursor = tappable ? 'pointer' : '';
         el.style.textDecoration = tappable ? 'underline' : '';
         let text = labels[status] || status;
@@ -576,20 +618,29 @@
       const reviewLink = document.getElementById('title-review-link');
       if (pendingCount > 0) {
         reviewLink.style.display = '';
-        reviewLink.textContent = 'Review ' + pendingCount + ' suggested title' + (pendingCount === 1 ? '' : 's') + ' →';
+        reviewLink.textContent = 'Titles (' + pendingCount + ' pending)';
       } else {
-        reviewLink.style.display = 'none';
+        reviewLink.style.display = '';
+        reviewLink.textContent = 'Titles (0 pending)';
       }
 
       const contentIdeasCount = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingContentIdea).length;
       const contentIdeasLink = document.getElementById('content-ideas-link');
       if (contentIdeasCount > 0) {
         contentIdeasLink.style.display = '';
-        contentIdeasLink.textContent = contentIdeasCount + ' rant' + (contentIdeasCount === 1 ? '' : 's') + ' ready for content →';
+        contentIdeasLink.textContent = 'Content Ideas (' + contentIdeasCount + ' pending)';
       } else {
-        contentIdeasLink.style.display = 'none';
+        contentIdeasLink.style.display = '';
+        contentIdeasLink.textContent = 'Content Ideas (0 pending)';
       }
 
+      const mentalityCount = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingMentalityReview).length;
+      document.getElementById('curate-pending').textContent = '(' + (pendingCount + contentIdeasCount + mentalityCount) + ')';
+      document.getElementById('mentality-pending').textContent = '(' + mentalityCount + ' pending)';
+      const recordPreview = document.getElementById('record-preview');
+      const addDrafts = (document.getElementById('title-input').value.trim() ? 1 : 0) +
+        (recordPreview && (recordPreview.style.display !== 'none' || (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording')) ? 1 : 0);
+      document.getElementById('add-pending').textContent = addDrafts ? '(' + addDrafts + ' draft' + (addDrafts === 1 ? '' : 's') + ')' : '';
       const tiles = document.getElementById('tiles');
       tiles.innerHTML = '';
       PILLAR_ORDER.forEach(function (key) {
@@ -1042,7 +1093,7 @@
       if (!list) return;
       const pending = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingMentalityReview);
       list.innerHTML = '';
-      if (!pending.length) return;
+      if (!pending.length) { list.textContent = 'No mentalities awaiting review.'; return; }
       pending.forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
@@ -1082,7 +1133,8 @@
             return;
           }
           renderMentalityReview();
-          renderSection(currentPillar, currentMentality);
+          if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+          renderHome();
         };
         row.appendChild(confirmBtn);
 
@@ -1094,12 +1146,11 @@
       const meta = PILLARS[key];
       document.getElementById('section-title').textContent = meta.label + ' · ' + mentalityLabel(mentality);
       document.getElementById('section-title').style.color = meta.color;
-      document.getElementById('pillar-input').value = key;
-      document.getElementById('mentality-input').value = mentality;
+      // Add owns its form draft. Browsing another section must not overwrite it.
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
       const recordDetails = document.getElementById('record-clip-details');
       if (recordDetails) {
-        recordDetails.style.display = key === 'carl' ? '' : 'none';
+        recordDetails.style.display = '';
         if (key === 'carl') renderMentalityReview();
       }
 
@@ -1166,6 +1217,7 @@
         const playBtn = document.createElement('button');
         playBtn.className = 'play-btn';
         playBtn.textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+        playBtn.setAttribute('aria-label', (HypeAudio.isPlaying(clip.id) ? 'Pause ' : 'Play ') + clip.title);
         playBtn.onclick = function () {
           // Currently-loaded clip: plain pause/resume, keeps its place in the
           // list-descent. A different clip: start playing down the list from
@@ -1178,6 +1230,7 @@
         const favBtn = document.createElement('button');
         favBtn.className = 'play-btn' + (clip.favorite ? ' favorite-active' : '');
         favBtn.title = clip.favorite ? 'Remove favorite' : 'Mark favorite';
+        favBtn.setAttribute('aria-label', favBtn.title + ': ' + clip.title);
         favBtn.textContent = clip.favorite ? '⭐' : '☆';
         favBtn.onclick = function () {
           HypeAudio.updateClip(clip.id, { favorite: !clip.favorite });
@@ -1187,6 +1240,7 @@
         const repeatBtn = document.createElement('button');
         repeatBtn.className = 'play-btn' + (HypeAudio.isPlayingRepeat(clip.id) ? ' repeat-active' : '');
         repeatBtn.title = 'Repeat this clip';
+        repeatBtn.setAttribute('aria-label', 'Repeat: ' + clip.title);
         repeatBtn.textContent = HypeAudio.isPlayingRepeat(clip.id) ? '■' : '🔁';
         repeatBtn.onclick = function () {
           if (HypeAudio.isPlayingRepeat(clip.id)) { HypeAudio.stopPlayback(); }
@@ -1199,6 +1253,7 @@
         const menuBtn = document.createElement('button');
         menuBtn.className = 'menu-btn';
         menuBtn.title = 'More';
+        menuBtn.setAttribute('aria-label', 'More actions: ' + clip.title);
         menuBtn.textContent = '⋮';
         const dropdown = document.createElement('div');
         dropdown.className = 'menu-dropdown';
@@ -1313,6 +1368,7 @@
       bar.style.display = 'flex';
       document.getElementById('nowplaying-title').textContent = clip.title || 'Untitled';
       document.getElementById('nowplaying-toggle').textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+      document.getElementById('nowplaying-toggle').setAttribute('aria-label', HypeAudio.isPlaying(clip.id) ? 'Pause playback' : 'Resume playback');
       let explanation = '';
       try { explanation = HypeAudio.explainQueuePick(clip, HypeAudio.getPlaybackContext()) || ''; } catch (e) {}
       document.getElementById('nowplaying-explain-text').textContent = explanation;
@@ -1337,28 +1393,28 @@
     // once a clip ends, without polling).
     HypeAudio.onPlaybackChange(function () {
       renderNowPlaying();
-      if (currentMentality) renderSection(currentPillar, currentMentality);
+      if (currentMentality !== null) renderSection(currentPillar, currentMentality);
       else if (currentPillar) renderSubcats(currentPillar);
       else renderHome();
     });
 
     // Shared by both upload forms (clip-list screen has a fixed mentality;
     // subcat screen lets you type a brand-new one that has no tile yet).
-    async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput) {
+    async function submitClip(form, pillar, mentality, moment, source, fileInput, titleInput, metadata) {
       const file = fileInput.files[0];
       // Normalized to lowercase -- mentality is the grouping key for subcat
       // tiles and random filters, so "Goggins" and "goggins" would otherwise
       // become two separate subcategories.
       mentality = (mentality || '').trim().toLowerCase();
       const title = (titleInput.value || '').trim();
-      if (!mentality || !title) { alert('Title and mentality are both required.'); return; }
+      if (!title || (!mentality && !metadata.allowUntagged)) { alert('Title and mentality are both required.'); return false; }
       const submitBtn = form.querySelector('button[type="submit"]');
       submitBtn.disabled = true; // also the double-submit guard
       const prevLabel = submitBtn.textContent;
       submitBtn.textContent = 'Uploading…';
       try {
         const { url, error } = await HypeAudio.uploadClipFile(file);
-        if (!url) { alert(error || 'Upload failed.'); return; }
+        if (!url) { alert(error || 'Upload failed.'); return false; }
         HypeAudio.addClip({
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
           title: title,
@@ -1366,13 +1422,14 @@
           pillar: pillar,
           moment: moment,
           source_type: source,
-          use_case: document.getElementById('use-case-input').value || null,
-          delivery_role: document.getElementById('delivery-role-input').value || null,
+          use_case: metadata.useCase || null,
+          delivery_role: metadata.deliveryRole || null,
           storage_url: url,
           created_at: new Date().toISOString(),
           play_count: 0,
         });
         form.reset();
+        return true;
       } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = prevLabel;
@@ -1381,16 +1438,18 @@
 
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
-      await submitClip(
-        e.target, currentPillar, currentMentality,
+      const saved = await submitClip(
+        e.target, document.getElementById('pillar-input').value, document.getElementById('mentality-input').value,
         document.getElementById('moment-input').value,
         document.getElementById('source-input').value,
         document.getElementById('file-input'),
-        document.getElementById('title-input')
+        document.getElementById('title-input'),
+        { useCase: document.getElementById('use-case-input').value, deliveryRole: document.getElementById('delivery-role-input').value, allowUntagged: true }
       );
-      document.getElementById('pillar-input').value = currentPillar;
-      document.getElementById('mentality-input').value = currentMentality;
-      renderSection(currentPillar, currentMentality);
+      if (!saved) return;
+      document.getElementById('pillar-input').value = 'carl';
+      if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+      renderHome();
     });
 
     document.getElementById('sc-upload-form').addEventListener('submit', async function (e) {
@@ -1401,7 +1460,8 @@
         document.getElementById('sc-moment-input').value,
         document.getElementById('sc-source-input').value,
         document.getElementById('sc-file-input'),
-        document.getElementById('sc-title-input')
+        document.getElementById('sc-title-input'),
+        { useCase: null, deliveryRole: null }
       );
       renderSubcats(currentPillar);
     });
@@ -1588,7 +1648,8 @@
           });
           if (cue) HypeAudio.setClipCue(newClipId, cue);
           resetRecordUi();
-          renderSection(currentPillar, currentMentality);
+          if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+          renderHome();
         } finally {
           saveBtn.disabled = false;
         }
@@ -1876,21 +1937,25 @@
             // x"><img onerror=...> was an XSS sink that could exfiltrate the upload passphrase
             // kept in localStorage (audit P1-1). row.dataset.clipId below reads the original back.
             return '<div class="clip search-result" data-clip-id="' + escapeHtml(c.id) + '">' +
-              '<div class="clip-info">' +
-                '<div class="clip-title">' + escapeHtml(c.title) + '</div>' +
-                '<div class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</div>' +
-                (preview ? '<div class="clip-quote">' + escapeHtml(preview) + '</div>' : '') +
-              '</div>' +
+              '<button type="button" class="clip-info search-play" aria-label="Play ' + escapeHtml(c.title) + '">' +
+                '<span class="clip-title">' + escapeHtml(c.title) + '</span>' +
+                '<span class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</span>' +
+                (preview ? '<span class="clip-quote">' + escapeHtml(preview) + '</span>' : '') +
+                '<span>Play</span>' +
+              '</button>' +
+              '<button type="button" class="search-open" aria-label="Open section for ' + escapeHtml(c.title) + '">Open section</button>' +
             '</div>';
           }).join('')
         : '<div class="empty-state">No matches</div>';
       resultsEl.querySelectorAll('.search-result').forEach(function (row) {
-        row.onclick = function () {
+        row.querySelector('.search-play').onclick = function () {
           const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
-          // A pillar-less/mentality-less legacy clip (this app has always
-          // supported that shape -- see hype-audio.selfcheck.js's own
-          // "unmigrated legacy shape" test) would crash showSection().
-          if (clip && clip.pillar && clip.mentality) showSection(clip.pillar, clip.mentality);
+          if (clip) HypeAudio.playFromList(results, clip.id);
+        };
+        row.querySelector('.search-open').onclick = function () {
+          const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
+          // Blank mentality is a valid section; an unknown pillar is not.
+          if (clip && Object.hasOwn(PILLARS, clip.pillar)) showSection(clip.pillar, clip.mentality || '');
         };
       });
     });
@@ -1995,6 +2060,53 @@
       document.getElementById('focus-outcome-skip').onclick = function () { finishOutcome('skip'); };
     })();
 
+    // Fold existing controls without cloning forms, drafts or event handlers.
+    (function foldHome() {
+      const home = document.getElementById('view-home');
+      function block(id, label, nodes) {
+        const section = document.createElement('section'); section.id = id;
+        const heading = document.createElement('h2'); heading.textContent = label; section.appendChild(heading);
+        nodes.forEach(function (node) { section.appendChild(node); }); home.appendChild(section);
+      }
+      block('quick-play', 'Quick Play', ['moment-row', 'state-mode-row', 'cues-row', 'focus-details', 'quote-bed-row'].map(function (id) { return document.getElementById(id); }));
+      block('library-block', 'Library', ['global-search-input', 'global-search-results', 'tiles'].map(function (id) { return document.getElementById(id); }));
+      block('week-block', 'This week', [home.querySelector('button[onclick="showWeeklyRecap()"]')]);
+      const add = document.getElementById('add-dialog'), curate = document.getElementById('curate-dialog');
+      const upload = document.getElementById('upload-form'), uploadPanel = upload.closest('details');
+      uploadPanel.id = 'upload-form-panel'; uploadPanel.querySelector('summary').textContent = 'Upload';
+      document.getElementById('add-forms').appendChild(uploadPanel);
+      document.getElementById('mentality-input').required = false;
+      document.getElementById('pillar-input').value = 'carl';
+      const record = document.getElementById('record-clip-details');
+      if (record) { record.style.display = ''; record.querySelector('summary').textContent = 'Record'; document.getElementById('add-forms').appendChild(record); }
+      else document.getElementById('record-unavailable').hidden = false;
+      function classification(form, nodes) {
+        const details = document.createElement('details'), summary = document.createElement('summary');
+        summary.textContent = 'Classification (optional)'; details.appendChild(summary);
+        nodes.forEach(function (node) { details.appendChild(node); });
+        form.insertBefore(details, form.querySelector('button[type="submit"]'));
+      }
+      classification(upload, [document.getElementById('mentality-input').closest('.field'), ...upload.querySelectorAll('select')]);
+      if (record) classification(document.getElementById('record-save-form'), [document.getElementById('record-mentality-input').closest('.field'), ...document.getElementById('record-save-form').querySelectorAll('select'), document.getElementById('record-cue-host')]);
+      ['title-review-link', 'content-ideas-link'].forEach(function (id) {
+        const button = document.getElementById(id); document.getElementById('curate-entrances').appendChild(button);
+        button.addEventListener('click', function () { curate.close(); });
+      });
+      const mentalities = document.getElementById('mentality-review-list');
+      document.getElementById('mentality-curate-host').appendChild(mentalities);
+      document.getElementById('open-add').onclick = function () { renderHome(); add.showModal(); };
+      document.getElementById('close-add').onclick = function () { add.close(); renderHome(); };
+      document.getElementById('open-curate').onclick = function () { renderHome(); renderMentalityReview(); curate.showModal(); };
+      document.getElementById('close-curate').onclick = function () { curate.close(); };
+      add.addEventListener('close', function () { renderHome(); });
+      document.querySelectorAll('.back-btn').forEach(function (button) { button.setAttribute('aria-label', 'Go back'); });
+      // Reserve the actual player + navigation height, including expanded feedback controls.
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(function (entries) {
+          document.documentElement.style.setProperty('--player-clearance', Math.ceil(entries[0].target.getBoundingClientRect().height) + 'px');
+        }).observe(document.querySelector('.tabbar'));
+      }
+    })();
     showHome();
     appReady = true;
     handleDeepLink();

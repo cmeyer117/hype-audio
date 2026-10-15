@@ -252,11 +252,41 @@
   }
   .tab .tab-emoji { font-size: 16px; }
   .tab.active { color: var(--text-primary); background: rgba(255,255,255,0.07); border-color: var(--border-strong); }
+  .home-tools { display:flex; justify-content:flex-end; gap:10px; margin-bottom:14px; }
+  .home-tools button, .search-play, .search-open, dialog button { padding:12px; border:1px solid var(--border-strong); border-radius:10px; background:var(--bg-card); color:var(--text-primary); font:inherit; cursor:pointer; }
+  dialog { box-sizing:border-box; width:min(620px, calc(100% - 24px)); max-height:85dvh; overflow:auto; padding:16px; border:1px solid var(--border-strong); border-radius:16px; background:var(--bg-card); color:var(--text-primary); }
+  dialog::backdrop { background:rgba(0,0,0,.75); }
+  dialog .back-row { justify-content:space-between; }
+  dialog input, dialog select { box-sizing:border-box; }
+  dialog details > .field, dialog details > select, dialog details > .cue-editor { margin:10px 0; }
+  #quick-play h2, #library-block h2, #week-block h2 { font-size:18px; margin:18px 0 12px; }
+  #focus-details { border:1px solid var(--border); border-radius:14px; margin-bottom:20px; }
+  #focus-details h3 { margin:12px 16px 0; font-size:15px; }
+  #quick-play .moment-row { flex-wrap:wrap; margin-bottom:12px; }
+  #quick-play .moment-btn { flex:1 1 100px; }
+  .search-result { flex-wrap:wrap; }
+  .search-result .clip-info { flex:1 0 100%; }
 </style>
 </head>
 <body>
 <div class="page-bg" id="page-bg"></div>
 <div class="page">
+
+  <header class="home-tools">
+    <button type="button" id="open-add">Add <span id="add-pending"></span></button>
+    <button type="button" id="open-curate">Curate <span id="curate-pending"></span></button>
+  </header>
+  <dialog id="add-dialog" aria-labelledby="add-heading">
+    <div class="back-row"><h2 id="add-heading">Add</h2><button type="button" id="close-add">Close Add</button></div>
+    <p>Upload or record. Classification is optional; recordings belong to Carl.</p>
+    <div id="add-forms"></div>
+    <p id="record-unavailable" hidden>Recording is unavailable in this browser. Upload an audio file instead.</p>
+  </dialog>
+  <dialog id="curate-dialog" aria-labelledby="curate-heading">
+    <div class="back-row"><h2 id="curate-heading">Curate</h2><button type="button" id="close-curate">Close Curate</button></div>
+    <div id="curate-entrances"></div>
+    <details id="mentality-curate"><summary>Mentalities <span id="mentality-pending"></span></summary><div id="mentality-curate-host"></div></details>
+  </dialog>
 
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
@@ -273,8 +303,8 @@
     <div class="moment-row" id="cues-row"></div>
     <div class="moment-row" id="quote-bed-row"></div>
 
-    <details id="focus-details">
-      <summary>Focus</summary>
+    <section id="focus-details" aria-label="Focus">
+      <h3>Focus</h3>
       <div id="focus-setup" style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px;">
         <div class="moment-row" id="focus-duration-row"></div>
         <div class="moment-row" id="focus-sound-row"></div>
@@ -292,7 +322,7 @@
           <button type="button" class="moment-btn" id="focus-outcome-skip">Skip</button>
         </div>
       </div>
-    </details>
+    </section>
   </div>
 
   <div id="view-subcat" style="display:none; padding: 0 10px">
@@ -578,7 +608,8 @@
         reviewLink.style.display = '';
         reviewLink.textContent = 'Review ' + pendingCount + ' suggested title' + (pendingCount === 1 ? '' : 's') + ' →';
       } else {
-        reviewLink.style.display = 'none';
+        reviewLink.style.display = '';
+        reviewLink.textContent = 'Titles (0 pending)';
       }
 
       const contentIdeasCount = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingContentIdea).length;
@@ -587,9 +618,17 @@
         contentIdeasLink.style.display = '';
         contentIdeasLink.textContent = contentIdeasCount + ' rant' + (contentIdeasCount === 1 ? '' : 's') + ' ready for content →';
       } else {
-        contentIdeasLink.style.display = 'none';
+        contentIdeasLink.style.display = '';
+        contentIdeasLink.textContent = 'Content Ideas (0 pending)';
       }
 
+      const mentalityCount = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingMentalityReview).length;
+      document.getElementById('curate-pending').textContent = '(' + (pendingCount + contentIdeasCount + mentalityCount) + ')';
+      document.getElementById('mentality-pending').textContent = '(' + mentalityCount + ' pending)';
+      const recordPreview = document.getElementById('record-preview');
+      const addDrafts = (document.getElementById('title-input').value.trim() ? 1 : 0) +
+        (recordPreview && (recordPreview.style.display !== 'none' || (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.state === 'recording')) ? 1 : 0);
+      document.getElementById('add-pending').textContent = addDrafts ? '(' + addDrafts + ' draft' + (addDrafts === 1 ? '' : 's') + ')' : '';
       const tiles = document.getElementById('tiles');
       tiles.innerHTML = '';
       PILLAR_ORDER.forEach(function (key) {
@@ -1082,7 +1121,8 @@
             return;
           }
           renderMentalityReview();
-          renderSection(currentPillar, currentMentality);
+          if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+          renderHome();
         };
         row.appendChild(confirmBtn);
 
@@ -1094,12 +1134,11 @@
       const meta = PILLARS[key];
       document.getElementById('section-title').textContent = meta.label + ' · ' + mentalityLabel(mentality);
       document.getElementById('section-title').style.color = meta.color;
-      document.getElementById('pillar-input').value = key;
-      document.getElementById('mentality-input').value = mentality;
+      // Add owns its form draft. Browsing another section must not overwrite it.
       document.getElementById('page-bg').style.backgroundImage = "url('" + mentalityArt(mentality) + "')";
       const recordDetails = document.getElementById('record-clip-details');
       if (recordDetails) {
-        recordDetails.style.display = key === 'carl' ? '' : 'none';
+        recordDetails.style.display = '';
         if (key === 'carl') renderMentalityReview();
       }
 
@@ -1351,7 +1390,7 @@
       // become two separate subcategories.
       mentality = (mentality || '').trim().toLowerCase();
       const title = (titleInput.value || '').trim();
-      if (!mentality || !title) { alert('Title and mentality are both required.'); return; }
+      if (!title || (!mentality && !metadata.allowUntagged)) { alert('Title and mentality are both required.'); return; }
       const submitBtn = form.querySelector('button[type="submit"]');
       submitBtn.disabled = true; // also the double-submit guard
       const prevLabel = submitBtn.textContent;
@@ -1382,16 +1421,16 @@
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       await submitClip(
-        e.target, currentPillar, currentMentality,
+        e.target, document.getElementById('pillar-input').value, document.getElementById('mentality-input').value,
         document.getElementById('moment-input').value,
         document.getElementById('source-input').value,
         document.getElementById('file-input'),
         document.getElementById('title-input'),
-        { useCase: document.getElementById('use-case-input').value, deliveryRole: document.getElementById('delivery-role-input').value }
+        { useCase: document.getElementById('use-case-input').value, deliveryRole: document.getElementById('delivery-role-input').value, allowUntagged: true }
       );
-      document.getElementById('pillar-input').value = currentPillar;
-      document.getElementById('mentality-input').value = currentMentality;
-      renderSection(currentPillar, currentMentality);
+      document.getElementById('pillar-input').value = 'carl';
+      if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+      renderHome();
     });
 
     document.getElementById('sc-upload-form').addEventListener('submit', async function (e) {
@@ -1590,7 +1629,8 @@
           });
           if (cue) HypeAudio.setClipCue(newClipId, cue);
           resetRecordUi();
-          renderSection(currentPillar, currentMentality);
+          if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+          renderHome();
         } finally {
           saveBtn.disabled = false;
         }
@@ -2001,6 +2041,45 @@
       document.getElementById('focus-outcome-skip').onclick = function () { finishOutcome('skip'); };
     })();
 
+    // Fold existing controls without cloning forms, drafts or event handlers.
+    (function foldHome() {
+      const home = document.getElementById('view-home');
+      function block(id, label, nodes) {
+        const section = document.createElement('section'); section.id = id;
+        const heading = document.createElement('h2'); heading.textContent = label; section.appendChild(heading);
+        nodes.forEach(function (node) { section.appendChild(node); }); home.appendChild(section);
+      }
+      block('quick-play', 'Quick Play', ['moment-row', 'state-mode-row', 'cues-row', 'focus-details', 'quote-bed-row'].map(function (id) { return document.getElementById(id); }));
+      block('library-block', 'Library', ['global-search-input', 'global-search-results', 'tiles'].map(function (id) { return document.getElementById(id); }));
+      block('week-block', 'This week', [home.querySelector('button[onclick="showWeeklyRecap()"]')]);
+      const add = document.getElementById('add-dialog'), curate = document.getElementById('curate-dialog');
+      const upload = document.getElementById('upload-form'), uploadPanel = upload.closest('details');
+      uploadPanel.id = 'upload-form-panel'; uploadPanel.querySelector('summary').textContent = 'Upload';
+      document.getElementById('add-forms').appendChild(uploadPanel);
+      document.getElementById('mentality-input').required = false;
+      document.getElementById('pillar-input').value = 'carl';
+      const record = document.getElementById('record-clip-details');
+      if (record) { record.style.display = ''; record.querySelector('summary').textContent = 'Record'; document.getElementById('add-forms').appendChild(record); }
+      else document.getElementById('record-unavailable').hidden = false;
+      function classification(form, nodes) {
+        const details = document.createElement('details'), summary = document.createElement('summary');
+        summary.textContent = 'Classification (optional)'; details.appendChild(summary);
+        nodes.forEach(function (node) { details.appendChild(node); });
+        form.insertBefore(details, form.querySelector('button[type="submit"]'));
+      }
+      classification(upload, [document.getElementById('mentality-input').closest('.field'), ...upload.querySelectorAll('select')]);
+      if (record) classification(document.getElementById('record-save-form'), [document.getElementById('record-mentality-input').closest('.field'), ...document.getElementById('record-save-form').querySelectorAll('select'), document.getElementById('record-cue-host')]);
+      ['title-review-link', 'content-ideas-link'].forEach(function (id) {
+        const button = document.getElementById(id); document.getElementById('curate-entrances').appendChild(button);
+        button.addEventListener('click', function () { curate.close(); });
+      });
+      const mentalities = document.getElementById('mentality-review-list');
+      document.getElementById('mentality-curate-host').appendChild(mentalities);
+      document.getElementById('open-add').onclick = function () { renderHome(); add.showModal(); };
+      document.getElementById('close-add').onclick = function () { add.close(); renderHome(); };
+      document.getElementById('open-curate').onclick = function () { renderHome(); renderMentalityReview(); curate.showModal(); };
+      document.getElementById('close-curate').onclick = function () { curate.close(); };
+    })();
     showHome();
     appReady = true;
     handleDeepLink();

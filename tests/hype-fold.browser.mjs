@@ -27,7 +27,7 @@ async function fixture(browser){
   try{return route.fulfill({contentType:({'.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'})[extname(path)]||'application/octet-stream',body:await readFile(path)});}catch{return route.abort();}
  });
  await page.addInitScript(({clips})=>{
-  localStorage.setItem('hype_audio',JSON.stringify(clips));localStorage.setItem('hype_audio_quote_bed','0');window.audioPlays=[];
+  localStorage.setItem('hype_audio',JSON.stringify(clips));localStorage.setItem('hype_quote_bed','0');window.audioPlays=[];
   class FakeAudio extends EventTarget {constructor(src){super();this.src=src;this.paused=true;this.currentTime=0;this.duration=10;this.volume=1;}play(){this.paused=false;window.audioPlays.push(this.src);return Promise.resolve();}pause(){this.paused=true;}load(){}removeAttribute(){} }
   window.Audio=FakeAudio;
   navigator.mediaDevices.getUserMedia=async()=>({getTracks:()=>[{stop(){}}]});
@@ -59,6 +59,39 @@ check('direct-search',async page=>{
  assert.equal(await page.locator('#view-home').isVisible(),true,'direct play stays on search');
  assert.ok((await page.locator('.search-result').innerText()).includes('Fixture transcript about effort'));
  await page.locator('.search-open').click();assert.equal(await page.locator('#view-section').isVisible(),true);
+});
+check('home-order',async page=>{
+ assert.deepEqual(await page.locator('#view-home > section').evaluateAll(nodes=>nodes.map(n=>n.id)),['quick-play','library-block','week-block']);
+ assert.equal(await page.locator('#focus-start-btn').isVisible(),true,'Focus must not require opening a hidden block');
+ assert.equal(await page.locator('#tiles button').count(),5,'retain existing Speeches alongside original four pillars');
+});
+check('tap-eight',async page=>{
+ const click=async selector=>{await page.locator(selector).click({timeout:2000});return 1;};
+ const home=async()=>page.evaluate(()=>{HypeAudio.stopPlayback();showHome();});
+ const counts={};
+ counts.midSet=await click('#moment-row button:nth-child(2)');await home();
+ counts.state=await click('#state-mode-row button:first-child');await home();
+ counts.cue=await click('#cues-row button:first-child');await home();
+ counts.focus=await click('#focus-start-btn');await click('#focus-stop-btn');await click('#focus-outcome-skip');await home();
+ counts.browse=await click('#tiles button:nth-child(4)');counts.browse+=await click('#subcat-tiles button:has-text("Drive")');counts.browse+=await click('#clip-list .play-btn:first-child');await home();
+ counts.search=await click('#global-search-input');await page.locator('#global-search-input').fill('Fixture drive');counts.search+=await click('.search-play');await home();
+ counts.upload=await click('#open-add');counts.upload+=await click('#add-dialog #upload-form-panel > summary');assert.equal(await page.locator('#file-input').isVisible(),true);await click('#close-add');
+ counts.record=await click('#open-add');counts.record+=await click('#record-clip-details > summary');counts.record+=await click('#record-start-btn');assert.equal(await page.locator('#record-stop-btn').isVisible(),true);await click('#record-stop-btn');await click('#close-add');
+ for(const [name,limit] of Object.entries({midSet:1,state:1,cue:1,focus:2,browse:3,search:2,upload:2,record:3}))assert.ok(counts[name]<=limit,`${name}: ${counts[name]}>${limit}`);
+ console.log('TAPS '+JSON.stringify(counts));
+});
+check('add-draft',async page=>{
+ await page.locator('#open-add').click({timeout:1500});await page.locator('#upload-form-panel > summary').click();await page.locator('#title-input').fill('Unfinished fixture');
+ await page.locator('#close-add').click();await page.locator('#open-add').click();assert.equal(await page.locator('#title-input').inputValue(),'Unfinished fixture');
+ await page.locator('#record-clip-details > summary').click();await page.locator('#record-start-btn').click();await page.locator('#close-add').click();await page.locator('#open-add').click();assert.equal(await page.locator('#record-stop-btn').isVisible(),true,'closing Add preserves active recording');await page.locator('#record-stop-btn').click();
+ assert.equal(await page.locator('#record-preview').isVisible(),true);
+});
+check('screens',async page=>{
+ const shot=async name=>page.screenshot({path:resolve(process.env.TEMP||'/tmp',`hype-fold-${name}-375.png`),fullPage:true});
+ await shot('home');await page.locator('#open-add').click();await page.locator('#upload-form-panel > summary').click();await shot('add');await page.locator('#close-add').click();
+ await page.locator('#open-curate').click();await shot('curate');await page.locator('#close-curate').click();
+ await page.evaluate(()=>showSection('carl','drive'));await shot('section');
+ await page.evaluate(()=>{showHome();HypeAudio.playClip(HypeAudio.listActiveClips().find(c=>c.id==='tagged'));});await shot('player');
 });
 const browser=await chromium.launch({channel:'msedge'});let failures=0,passed=0;
 try{for(const c of cases.filter(c=>!process.argv[2]||c.name===process.argv[2])){const{page,errors}=await fixture(browser);try{await c.run(page);assert.deepEqual(errors,[]);console.log('PASS '+c.name);passed++;}catch(e){failures++;console.error('FAIL '+c.name+': '+e.message);}finally{await page.close();}}}finally{await browser.close();}

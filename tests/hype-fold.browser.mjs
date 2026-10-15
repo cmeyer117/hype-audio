@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const {chromium}=createRequire(process.env.HYPE_PLAYWRIGHT_PACKAGE || 'C:/Users/gregm/row/package.json')('playwright');
 const clips=[
- {id:'tagged',title:'Fixture drive',pillar:'carl',mentality:'drive',moment:'mid_set',source_type:'personal_use',delivery_role:'motivational_speech',storage_url:'https://media.invalid/drive.mp3',transcript:'Fixture transcript about effort'},
+ {id:'tagged',title:'Fixture drive',pillar:'carl',mentality:'drive',moment:'mid_set',source_type:'personal_use',delivery_role:'motivational_speech',storage_url:'https://media.invalid/drive.mp3',transcript_text:'Fixture transcript about effort'},
  {id:'blank',title:'Fixture untagged',pillar:'carl',mentality:'',moment:'mid_set',source_type:'personal_use',storage_url:'https://media.invalid/blank.mp3'},
  {id:'cue',title:'Fixture brace',pillar:'carl',mentality:'brace',delivery_role:'instructional_cue',storage_url:'https://media.invalid/cue.mp3'},
  {id:'focus',title:'Fixture focus',pillar:'carl',mentality:'focus',use_case:'study_focus',delivery_role:'instrumental',storage_url:'https://media.invalid/focus.mp3'},
@@ -22,6 +22,7 @@ async function fixture(browser){
   if(url.pathname==='/sync.js')return route.fulfill({contentType:'application/javascript',body:'window.initCloudSync=opts=>{window.cloudFixture=opts;opts.onStatusChange("offline");};'});
   if(url.pathname==='/hype-auth.js')return route.fulfill({contentType:'application/javascript',body:'window.HypeAuth={showLogin(){},getAccessToken:async()=>null};'});
   const path=resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
+  if(url.pathname==='/'&&process.env.HYPE_HTML)return route.fulfill({contentType:'text/html',body:await readFile(process.env.HYPE_HTML)});
   if(!path.startsWith(root+sep))return route.abort();
   try{return route.fulfill({contentType:({'.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'})[extname(path)]||'application/octet-stream',body:await readFile(path)});}catch{return route.abort();}
  });
@@ -44,12 +45,20 @@ check('metadata',async page=>{
  assert.equal(saved.use_case,null,'subcategory must not inherit hidden study_focus');assert.equal(saved.delivery_role,null,'subcategory must not inherit hidden noise');
 });
 check('untagged',async page=>{
- await page.locator('#global-search-input').fill('Fixture untagged');await page.locator('.search-result').click();
+ await page.locator('#global-search-input').fill('Fixture untagged');
+ const secondary=page.locator('.search-open');if(await secondary.count())await secondary.click();else await page.locator('.search-result').click();
  assert.equal(await page.locator('#view-section').isVisible(),true,'blank mentality search must open its section');
  assert.ok((await page.locator('#section-title').innerText()).includes('Untagged'));
  assert.equal(await page.locator('#clip-list').getByText('Fixture untagged',{exact:true}).count(),1);
  await page.evaluate(()=>cloudFixture.onApplied());
  assert.equal(await page.locator('#clip-list').getByText('Fixture untagged',{exact:true}).count(),1,'cloud refresh keeps untagged section');
+});
+check('direct-search',async page=>{
+ await page.locator('#global-search-input').fill('effort');await page.locator('.search-result').getByRole('button',{name:'Play Fixture drive',exact:true}).click({timeout:1500});
+ assert.equal(await page.evaluate(()=>HypeAudio.getCurrentClip()?.id),'tagged');
+ assert.equal(await page.locator('#view-home').isVisible(),true,'direct play stays on search');
+ assert.ok((await page.locator('.search-result').innerText()).includes('Fixture transcript about effort'));
+ await page.locator('.search-open').click();assert.equal(await page.locator('#view-section').isVisible(),true);
 });
 const browser=await chromium.launch({channel:'msedge'});let failures=0,passed=0;
 try{for(const c of cases.filter(c=>!process.argv[2]||c.name===process.argv[2])){const{page,errors}=await fixture(browser);try{await c.run(page);assert.deepEqual(errors,[]);console.log('PASS '+c.name);passed++;}catch(e){failures++;console.error('FAIL '+c.name+': '+e.message);}finally{await page.close();}}}finally{await browser.close();}

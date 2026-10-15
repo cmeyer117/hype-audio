@@ -1883,15 +1883,19 @@
                 '<div class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</div>' +
                 (preview ? '<div class="clip-quote">' + escapeHtml(preview) + '</div>' : '') +
               '</div>' +
+              '<button type="button" class="search-play" aria-label="Play ' + escapeHtml(c.title) + '">Play</button>' +
+              '<button type="button" class="search-open" aria-label="Open section for ' + escapeHtml(c.title) + '">Open section</button>' +
             '</div>';
           }).join('')
         : '<div class="empty-state">No matches</div>';
       resultsEl.querySelectorAll('.search-result').forEach(function (row) {
-        row.onclick = function () {
+        row.querySelector('.search-play').onclick = function () {
           const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
-          // A pillar-less/mentality-less legacy clip (this app has always
-          // supported that shape -- see hype-audio.selfcheck.js's own
-          // "unmigrated legacy shape" test) would crash showSection().
+          if (clip) HypeAudio.playFromList(results, clip.id);
+        };
+        row.querySelector('.search-open').onclick = function () {
+          const clip = results.find(function (c) { return c.id === row.dataset.clipId; });
+          // Blank mentality is a valid section; an unknown pillar is not.
           if (clip && Object.hasOwn(PILLARS, clip.pillar)) showSection(clip.pillar, clip.mentality || '');
         };
       });

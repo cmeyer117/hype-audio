@@ -4,7 +4,7 @@
 // (cache-as-played, not eager) -- see docs/superpowers/specs/2026-07-26-gym-proof-playback-design.md.
 'use strict';
 
-const APP_SHELL_CACHE = 'hype-audio-shell-v3';
+const APP_SHELL_CACHE = 'hype-audio-shell-v4';
 const AUDIO_CACHE = 'hype-audio-clips-v1';
 
 function isAudioClipRequest(url) {

@@ -54,7 +54,9 @@ check('untagged',async page=>{
  assert.equal(await page.locator('#clip-list').getByText('Fixture untagged',{exact:true}).count(),1,'cloud refresh keeps untagged section');
 });
 check('direct-search',async page=>{
- await page.locator('#global-search-input').fill('effort');await page.locator('.search-result').getByRole('button',{name:'Play Fixture drive',exact:true}).click({timeout:1500});
+ await page.locator('#global-search-input').fill('effort');
+ await page.locator('.search-result').getByRole('button',{name:'Play Fixture drive',exact:true}).waitFor({timeout:1500});
+ await page.locator('.search-result .clip-title').click();
  assert.equal(await page.evaluate(()=>HypeAudio.getCurrentClip()?.id),'tagged');
  assert.equal(await page.locator('#view-home').isVisible(),true,'direct play stays on search');
  assert.ok((await page.locator('.search-result').innerText()).includes('Fixture transcript about effort'));
@@ -92,6 +94,39 @@ check('screens',async page=>{
  await page.locator('#open-curate').click();await shot('curate');await page.locator('#close-curate').click();
  await page.evaluate(()=>showSection('carl','drive'));await shot('section');
  await page.evaluate(()=>{showHome();HypeAudio.playClip(HypeAudio.listActiveClips().find(c=>c.id==='tagged'));});await shot('player');
+});
+check('accessibility',async page=>{
+ const audit=async scope=>{
+  const defects=await page.locator(scope).evaluateAll(roots=>roots.flatMap(root=>[...root.querySelectorAll('button,input,select,summary')].filter(el=>el.getClientRects().length&&el.type!=='hidden').flatMap(el=>{
+   const r=el.getBoundingClientRect(),id=el.id||el.textContent.trim().slice(0,32);const out=[];
+   if(r.width<43.9||r.height<43.9)out.push(`${id}: ${Math.round(r.width)}x${Math.round(r.height)}`);
+   if(el.tagName==='BUTTON'&&!(/[a-z]/i.test(el.getAttribute('aria-label')||el.textContent)||/[a-z]/i.test(el.title)))out.push(`${id}: missing accessible name`);
+   return out;
+  })));
+  assert.deepEqual(defects,[],scope+' controls need44px targets and names');
+ };
+ await audit('#view-home, .home-tools, .tabbar');
+ await page.locator('#open-add').click();await page.locator('#upload-form-panel > summary').click();await page.locator('#upload-form-panel details summary').click();await audit('#add-dialog');
+ await page.locator('#record-clip-details > summary').click();await page.locator('#record-start-btn').click();await page.locator('#record-stop-btn').click();await page.locator('#record-save-form details > summary').click();await audit('#add-dialog');
+ await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>document.activeElement.id),'open-add','dialog restores opener focus');
+ await page.evaluate(()=>HypeAudio.updateClip('blank',{suggested_mentality:'discipline',suggested_title:'Fixture suggestion'}));
+ await page.locator('#open-curate').click();await page.locator('#mentality-curate > summary').click();await audit('#curate-dialog');await page.keyboard.press('Escape');
+ await page.evaluate(()=>HypeAudio.playClip(HypeAudio.listActiveClips()[0]));await audit('.tabbar');
+ await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));
+ assert.equal(await page.locator('#week-block button').evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),true,'persistent player must not cover last Home action');
+ assert.equal(await page.locator('#add-pending[aria-live], #curate-pending[aria-live], #mentality-pending[aria-live], #focus-remaining[aria-live]').count(),0);
+ await page.locator('#open-add').focus();await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.id),'open-curate');
+ assert.equal(await page.locator('#open-curate').evaluate(el=>getComputedStyle(el).outlineStyle),'solid','visible keyboard focus');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal scrolling');
+});
+check('add-save',async page=>{
+ await page.locator('#open-add').click();await page.locator('#upload-form-panel > summary').click();await page.locator('#upload-form-panel details summary').click();
+ await page.locator('#pillar-input').selectOption('faith');await page.locator('#title-input').fill('Fixture failed draft');await page.locator('#file-input').setInputFiles({name:'fixture.mp3',mimeType:'audio/mpeg',buffer:Buffer.from('fixture')});
+ await page.evaluate(()=>HypeAudio.uploadClipFile=async()=>({url:null,error:'Fixture refused'}));await page.locator('#upload-form button[type=submit]').click();
+ assert.equal(await page.locator('#pillar-input').inputValue(),'faith','failed upload must preserve selected classification');assert.equal(await page.locator('#title-input').inputValue(),'Fixture failed draft');
+ await page.evaluate(()=>HypeAudio.uploadClipFile=async()=>({url:'https://media.invalid/new.mp3'}));await page.locator('#upload-form button[type=submit]').click();
+ const clip=await page.evaluate(()=>HypeAudio.listActiveClips().find(c=>c.title==='Fixture failed draft'));assert.equal(clip.pillar,'faith');assert.equal(clip.mentality,'','optional classification allows untagged upload');
+ assert.equal(await page.locator('#title-input').inputValue(),'');assert.equal(await page.locator('#pillar-input').inputValue(),'carl');
 });
 const browser=await chromium.launch({channel:'msedge'});let failures=0,passed=0;
 try{for(const c of cases.filter(c=>!process.argv[2]||c.name===process.argv[2])){const{page,errors}=await fixture(browser);try{await c.run(page);assert.deepEqual(errors,[]);console.log('PASS '+c.name);passed++;}catch(e){failures++;console.error('FAIL '+c.name+': '+e.message);}finally{await page.close();}}}finally{await browser.close();}

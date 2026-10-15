@@ -142,7 +142,7 @@
   /* Own Cue Studio (spec 2026-10-08): trim + exercise editor */
   .cue-editor { display: flex; flex-direction: column; gap: 12px; padding: 10px 0; }
   .cue-editor .field { display: flex; flex-direction: column; gap: 6px; }
-  .cue-editor input[type="range"] { width: 100%; min-height: 32px; }
+  .cue-editor input[type="range"] { width: 100%; min-height: 44px; }
   .cue-editor .cue-readout { font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary); }
   .cue-editor .cue-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .cue-editor .cue-actions button { min-height: 44px; }
@@ -266,6 +266,17 @@
   #quick-play .moment-btn { flex:1 1 100px; }
   .search-result { flex-wrap:wrap; }
   .search-result .clip-info { flex:1 0 100%; }
+  .search-result .search-play { text-align:left; }
+  .search-result .search-play span { display:block; }
+  button, input, select, summary { min-width:44px; min-height:44px; box-sizing:border-box; }
+  :focus-visible { outline:3px solid #fff; outline-offset:3px; }
+  .clip { flex-wrap:wrap; }
+  .clip .clip-info { min-width:0; flex:1 1 140px; }
+  .clip .clip-actions { flex:1 0 100%; justify-content:flex-end; flex-wrap:wrap; }
+  .nowplaying-explain-text { min-width:0; }
+  #record-preview-audio { min-height:54px; }
+  #sync-status-indicator { background:transparent; border:0; text-align:left; padding:0; }
+  body { padding-bottom:calc(var(--player-clearance, 240px) + 24px + env(safe-area-inset-bottom)); }
 </style>
 </head>
 <body>
@@ -291,7 +302,7 @@
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
-    <div id="sync-status-indicator" style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></div>
+    <button type="button" id="sync-status-indicator" disabled style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></button>
     <input type="search" id="global-search-input" aria-label="Search everything you've said" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
@@ -491,13 +502,13 @@
     <div class="nowplaying" id="nowplaying" style="display:none">
       <div class="nowplaying-row">
         <span class="nowplaying-title" id="nowplaying-title"></span>
-        <button class="nowplaying-btn" id="nowplaying-toggle" type="button">⏸</button>
-        <button class="nowplaying-btn" id="nowplaying-stop" type="button">■</button>
+        <button class="nowplaying-btn" id="nowplaying-toggle" type="button" aria-label="Pause playback">⏸</button>
+        <button class="nowplaying-btn" id="nowplaying-stop" type="button" aria-label="Stop playback">■</button>
       </div>
       <div class="nowplaying-explain">
         <span class="nowplaying-explain-text" id="nowplaying-explain-text"></span>
-        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-up" type="button" title="More like this">👍</button>
-        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-down" type="button" title="Less like this">👎</button>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-up" type="button" title="More like this" aria-label="More like this">👍</button>
+        <button class="nowplaying-feedback-btn" id="nowplaying-thumbs-down" type="button" title="Less like this" aria-label="Less like this">👎</button>
       </div>
     </div>
     <div class="tabbar-inner" id="tabbar-inner"></div>
@@ -574,6 +585,7 @@
         // Signed out: the indicator becomes the sign-in button (playback never waits on this).
         const tappable = status === 'signedout' && window.HypeAuth;
         el.onclick = tappable ? function () { window.HypeAuth.showLogin(); } : null;
+        el.disabled = !tappable;
         el.style.cursor = tappable ? 'pointer' : '';
         el.style.textDecoration = tappable ? 'underline' : '';
         let text = labels[status] || status;
@@ -606,7 +618,7 @@
       const reviewLink = document.getElementById('title-review-link');
       if (pendingCount > 0) {
         reviewLink.style.display = '';
-        reviewLink.textContent = 'Review ' + pendingCount + ' suggested title' + (pendingCount === 1 ? '' : 's') + ' →';
+        reviewLink.textContent = 'Titles (' + pendingCount + ' pending)';
       } else {
         reviewLink.style.display = '';
         reviewLink.textContent = 'Titles (0 pending)';
@@ -616,7 +628,7 @@
       const contentIdeasLink = document.getElementById('content-ideas-link');
       if (contentIdeasCount > 0) {
         contentIdeasLink.style.display = '';
-        contentIdeasLink.textContent = contentIdeasCount + ' rant' + (contentIdeasCount === 1 ? '' : 's') + ' ready for content →';
+        contentIdeasLink.textContent = 'Content Ideas (' + contentIdeasCount + ' pending)';
       } else {
         contentIdeasLink.style.display = '';
         contentIdeasLink.textContent = 'Content Ideas (0 pending)';
@@ -1081,7 +1093,7 @@
       if (!list) return;
       const pending = HypeAudio.listActiveClips().filter(HypeAudio.hasPendingMentalityReview);
       list.innerHTML = '';
-      if (!pending.length) return;
+      if (!pending.length) { list.textContent = 'No mentalities awaiting review.'; return; }
       pending.forEach(function (clip) {
         const row = document.createElement('div');
         row.className = 'clip';
@@ -1205,6 +1217,7 @@
         const playBtn = document.createElement('button');
         playBtn.className = 'play-btn';
         playBtn.textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+        playBtn.setAttribute('aria-label', (HypeAudio.isPlaying(clip.id) ? 'Pause ' : 'Play ') + clip.title);
         playBtn.onclick = function () {
           // Currently-loaded clip: plain pause/resume, keeps its place in the
           // list-descent. A different clip: start playing down the list from
@@ -1217,6 +1230,7 @@
         const favBtn = document.createElement('button');
         favBtn.className = 'play-btn' + (clip.favorite ? ' favorite-active' : '');
         favBtn.title = clip.favorite ? 'Remove favorite' : 'Mark favorite';
+        favBtn.setAttribute('aria-label', favBtn.title + ': ' + clip.title);
         favBtn.textContent = clip.favorite ? '⭐' : '☆';
         favBtn.onclick = function () {
           HypeAudio.updateClip(clip.id, { favorite: !clip.favorite });
@@ -1226,6 +1240,7 @@
         const repeatBtn = document.createElement('button');
         repeatBtn.className = 'play-btn' + (HypeAudio.isPlayingRepeat(clip.id) ? ' repeat-active' : '');
         repeatBtn.title = 'Repeat this clip';
+        repeatBtn.setAttribute('aria-label', 'Repeat: ' + clip.title);
         repeatBtn.textContent = HypeAudio.isPlayingRepeat(clip.id) ? '■' : '🔁';
         repeatBtn.onclick = function () {
           if (HypeAudio.isPlayingRepeat(clip.id)) { HypeAudio.stopPlayback(); }
@@ -1238,6 +1253,7 @@
         const menuBtn = document.createElement('button');
         menuBtn.className = 'menu-btn';
         menuBtn.title = 'More';
+        menuBtn.setAttribute('aria-label', 'More actions: ' + clip.title);
         menuBtn.textContent = '⋮';
         const dropdown = document.createElement('div');
         dropdown.className = 'menu-dropdown';
@@ -1352,6 +1368,7 @@
       bar.style.display = 'flex';
       document.getElementById('nowplaying-title').textContent = clip.title || 'Untitled';
       document.getElementById('nowplaying-toggle').textContent = HypeAudio.isPlaying(clip.id) ? '⏸' : '▶';
+      document.getElementById('nowplaying-toggle').setAttribute('aria-label', HypeAudio.isPlaying(clip.id) ? 'Pause playback' : 'Resume playback');
       let explanation = '';
       try { explanation = HypeAudio.explainQueuePick(clip, HypeAudio.getPlaybackContext()) || ''; } catch (e) {}
       document.getElementById('nowplaying-explain-text').textContent = explanation;
@@ -1390,14 +1407,14 @@
       // become two separate subcategories.
       mentality = (mentality || '').trim().toLowerCase();
       const title = (titleInput.value || '').trim();
-      if (!title || (!mentality && !metadata.allowUntagged)) { alert('Title and mentality are both required.'); return; }
+      if (!title || (!mentality && !metadata.allowUntagged)) { alert('Title and mentality are both required.'); return false; }
       const submitBtn = form.querySelector('button[type="submit"]');
       submitBtn.disabled = true; // also the double-submit guard
       const prevLabel = submitBtn.textContent;
       submitBtn.textContent = 'Uploading…';
       try {
         const { url, error } = await HypeAudio.uploadClipFile(file);
-        if (!url) { alert(error || 'Upload failed.'); return; }
+        if (!url) { alert(error || 'Upload failed.'); return false; }
         HypeAudio.addClip({
           id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
           title: title,
@@ -1412,6 +1429,7 @@
           play_count: 0,
         });
         form.reset();
+        return true;
       } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = prevLabel;
@@ -1420,7 +1438,7 @@
 
     document.getElementById('upload-form').addEventListener('submit', async function (e) {
       e.preventDefault();
-      await submitClip(
+      const saved = await submitClip(
         e.target, document.getElementById('pillar-input').value, document.getElementById('mentality-input').value,
         document.getElementById('moment-input').value,
         document.getElementById('source-input').value,
@@ -1428,6 +1446,7 @@
         document.getElementById('title-input'),
         { useCase: document.getElementById('use-case-input').value, deliveryRole: document.getElementById('delivery-role-input').value, allowUntagged: true }
       );
+      if (!saved) return;
       document.getElementById('pillar-input').value = 'carl';
       if (currentMentality !== null) renderSection(currentPillar, currentMentality);
       renderHome();
@@ -1918,12 +1937,12 @@
             // x"><img onerror=...> was an XSS sink that could exfiltrate the upload passphrase
             // kept in localStorage (audit P1-1). row.dataset.clipId below reads the original back.
             return '<div class="clip search-result" data-clip-id="' + escapeHtml(c.id) + '">' +
-              '<div class="clip-info">' +
-                '<div class="clip-title">' + escapeHtml(c.title) + '</div>' +
-                '<div class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</div>' +
-                (preview ? '<div class="clip-quote">' + escapeHtml(preview) + '</div>' : '') +
-              '</div>' +
-              '<button type="button" class="search-play" aria-label="Play ' + escapeHtml(c.title) + '">Play</button>' +
+              '<button type="button" class="clip-info search-play" aria-label="Play ' + escapeHtml(c.title) + '">' +
+                '<span class="clip-title">' + escapeHtml(c.title) + '</span>' +
+                '<span class="clip-meta">' + escapeHtml(c.pillar) + ' · ' + escapeHtml(c.mentality) + '</span>' +
+                (preview ? '<span class="clip-quote">' + escapeHtml(preview) + '</span>' : '') +
+                '<span>Play</span>' +
+              '</button>' +
               '<button type="button" class="search-open" aria-label="Open section for ' + escapeHtml(c.title) + '">Open section</button>' +
             '</div>';
           }).join('')
@@ -2079,6 +2098,14 @@
       document.getElementById('close-add').onclick = function () { add.close(); renderHome(); };
       document.getElementById('open-curate').onclick = function () { renderHome(); renderMentalityReview(); curate.showModal(); };
       document.getElementById('close-curate').onclick = function () { curate.close(); };
+      add.addEventListener('close', function () { renderHome(); });
+      document.querySelectorAll('.back-btn').forEach(function (button) { button.setAttribute('aria-label', 'Go back'); });
+      // Reserve the actual player + navigation height, including expanded feedback controls.
+      if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(function (entries) {
+          document.documentElement.style.setProperty('--player-clearance', Math.ceil(entries[0].target.getBoundingClientRect().height) + 'px');
+        }).observe(document.querySelector('.tabbar'));
+      }
     })();
     showHome();
     appReady = true;

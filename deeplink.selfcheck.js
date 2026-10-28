@@ -35,7 +35,7 @@ assert.strictEqual(HypeAudio.resolveDeepLink(undefined, clips), null, 'a missing
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 assert.ok(/HypeAudio\.resolveDeepLink\(/.test(html), 'index.html calls resolveDeepLink');
 assert.ok(/row\.dataset\.clipId = clip\.id/.test(html), 'section rows carry data-clip-id (compared by value, never through a selector built from an id)');
-const fn = /function handleDeepLink\(\)[\s\S]*?\n    \}\n/.exec(html);
+const fn = /function handleDeepLink\(\)[\s\S]*?\r?\n    \}\r?\n/.exec(html);
 assert.ok(fn, 'handleDeepLink is defined');
 assert.ok(!/playClip|playFromList|togglePlay|playRandom|\.play\(/.test(fn[0]), 'the deep link never starts playback');
 assert.ok(/deepLinkClipId = target\.id/.test(fn[0]), 'the target id is remembered');

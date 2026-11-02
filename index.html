@@ -1273,6 +1273,8 @@
           if (!confirm('Delete "' + clip.title + '"? This can\'t be undone.')) return;
           HypeAudio.deleteClip(clip.id);
           renderSection(key, mentality);
+          // Remove the audio file too (best effort; signed-out or shared files stay for the weekly orphan guard).
+          if (window.hypeRemoveClipFile) window.hypeRemoveClipFile(clip.storage_url, HypeAudio.listActiveClips ? HypeAudio.listActiveClips() : []);
         };
         dropdown.appendChild(cooldownItem);
         if (clip.pillar === 'carl') {

@@ -416,4 +416,28 @@
     const signals = await fetchRowTrainingSignals();
     return signals?.phase ?? null;
   };
+
+  // Deleting a clip used to only tombstone it, leaving its audio file in the hype-audio bucket forever
+  // (534 orphans / 460 MB pushed the shared project over its 1 GB quota, 2026-11-01). Removes the file
+  // with the signed-in owner session (storage policy "owner delete hype-audio"). Returns
+  // 'removed' | 'in-use' | 'skip' | 'signed-out' | 'error'; anything but 'removed' leaves the file for
+  // the weekly orphan guard (sunday-ledgers Part 5).
+  const CLIP_PREFIX = SUPABASE_URL + '/storage/v1/object/public/hype-audio/';
+  window.hypeRemoveClipFile = async function (storageUrl, activeClips) {
+    if (typeof storageUrl !== 'string' || !storageUrl.startsWith(CLIP_PREFIX)) return 'skip';
+    let name;
+    try { name = decodeURIComponent(storageUrl.slice(CLIP_PREFIX.length).split('?')[0]); } catch { return 'skip'; }
+    if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) return 'skip';
+    if ((activeClips || []).some((c) => c && c.storage_url === storageUrl)) return 'in-use';
+    const supa = window.HypeAuth && window.HypeAuth.getClient();
+    if (!supa) return 'signed-out';
+    try {
+      const { data } = await supa.auth.getSession();
+      if (!data || !data.session) return 'signed-out';
+      const { error } = await supa.storage.from('hype-audio').remove([name]);
+      return error ? 'error' : 'removed';
+    } catch {
+      return 'error';
+    }
+  };
 })();

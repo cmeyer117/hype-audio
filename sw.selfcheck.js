@@ -55,4 +55,11 @@ assertEqual(canServeCached({ mode: 'cors' }, { type: 'cors' }), true, 'a CORS re
 assertEqual(canServeCached({ mode: 'no-cors' }, { type: 'opaque' }), true, 'a no-cors request still uses an opaque cached response');
 assertEqual(canServeCached({ mode: 'cors' }, undefined), false, 'nothing cached: fetch');
 
+// /api/health reports the live commit: the SW must leave it to the network, never cache it or answer from cache offline
+const { isHealthRequest } = require('./sw.js');
+assertEqual(isHealthRequest('https://hype-audio-app.vercel.app/api/health'), true, '/api/health is bypassed');
+assertEqual(isHealthRequest('https://hype-audio-app.vercel.app/api/health?x=1'), true, '/api/health with a query is bypassed');
+assertEqual(isHealthRequest('https://hype-audio-app.vercel.app/api/upload-clip'), false, 'other API paths are untouched');
+assertEqual(isHealthRequest('https://hype-audio-app.vercel.app/index.html'), false, 'the app shell is untouched');
+
 console.log('sw.selfcheck.js: all assertions passed');

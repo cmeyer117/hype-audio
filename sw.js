@@ -11,6 +11,11 @@ function isAudioClipRequest(url) {
   return url.indexOf('/storage/v1/object/public/hype-audio/') !== -1;
 }
 
+// /api/health reports the live commit: always the network, never cached or answered from cache.
+function isHealthRequest(url) {
+  return new URL(url).pathname === '/api/health';
+}
+
 // Audio elements (Safari especially) issue Range-header requests for
 // playback/seeking. These clips are short enough that streaming/seek
 // support isn't needed, so we always fetch/cache/serve the complete file --
@@ -68,6 +73,7 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
   self.addEventListener('fetch', function (event) {
     if (event.request.method !== 'GET') return;
     const url = event.request.url;
+    if (isHealthRequest(url)) return;
     if (isAudioClipRequest(url)) {
       event.respondWith(cacheFirst(stripRangeRequest(event.request), AUDIO_CACHE));
     } else if (url.indexOf(self.location.origin) === 0) {
@@ -82,5 +88,5 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isAudioClipRequest: isAudioClipRequest, stripRangeRequest: stripRangeRequest, canServeCached: canServeCached };
+  module.exports = { isAudioClipRequest: isAudioClipRequest, isHealthRequest: isHealthRequest, stripRangeRequest: stripRangeRequest, canServeCached: canServeCached };
 }

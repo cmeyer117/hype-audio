@@ -28,6 +28,8 @@
     // legitimately-empty local state on tab-close and overwrite good remote
     // data with nothing -- this happened for real 2026-07-25 (see SESSION_LOG).
     let syncReady = false;
+    // True once a failed remote-state apply has been logged; cleared when a sync succeeds so the next streak logs again.
+    let applyFailLogged = false;
 
     function matches(k) {
       if (!k) return false;
@@ -111,7 +113,20 @@
           const incoming = JSON.stringify(incomingValue);
           if (incoming !== JSON.stringify(remote[k])) divergesFromRemote = true;
           const local = localStorage.getItem(k);
-          if (local !== incoming) { try { origSet(k, incoming); changed = true; } catch (e) {} }
+          if (local !== incoming) {
+            try { origSet(k, incoming); changed = true; } catch (e) {
+              // Full or blocked store: the app keeps stale data. Log once per streak and show the
+              // retrying status (re-armed when a sync succeeds). Reporting must never throw.
+              try {
+                if (!applyFailLogged) {
+                  applyFailLogged = true;
+                  console.error('hype sync: could not apply remote state for ' + k, e);
+                }
+                statusState.applyFailed = true;
+                updateStatus();
+              } catch (e2) {}
+            }
+          }
         }
       } finally { suppressSync = false; }
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }
@@ -156,7 +171,7 @@
       if (s.signedOut) return 'signedout';
       if (s.pushInFlight) return 'saving';
       if (s.blocked) return 'blocked';
-      if (s.retrying) return 'retrying';
+      if (s.retrying || s.applyFailed) return 'retrying';
       return 'synced';
     }
     // A permission denial (Postgres RLS 42501, HTTP 401/403) never fixes itself by
@@ -172,7 +187,7 @@
       if (e.code === '42501' || e.status === 401 || e.status === 403) return true;
       return /row-level security|permission denied|not authorized|jwt|invalid api key/i.test(String(e.message || ''));
     }
-    const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false, signedOut: false };
+    const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false, signedOut: false, applyFailed: false };
     let lastSyncedAt = null;
     const onStatusChange = config && config.onStatusChange;
     function updateStatus() {
@@ -224,6 +239,8 @@
         lastSyncedAt = Date.now();
         statusState.retrying = false;
         statusState.blocked = false;
+        statusState.applyFailed = false;
+        applyFailLogged = false;
         updateStatus();
         return;
       }
@@ -291,7 +308,7 @@
           },
           body: req.body,
           keepalive: true,
-        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; statusState.applyFailed = false; applyFailLogged = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     let channelSubscribed = false;
@@ -320,6 +337,8 @@
         if (!error) {
           syncReady = true;
           statusState.initFailed = false;
+          statusState.applyFailed = false;
+          applyFailLogged = false;
           cloudUpdatedAt = (data && data.updated_at) || null; // CAS token for the next write
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);

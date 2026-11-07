@@ -6,7 +6,7 @@
 
 async function smoke(base, expectedCommit, fetchImpl) {
   const url = String(base).replace(/\/+$/, '') + '/api/health';
-  const res = await (fetchImpl || fetch)(url, { headers: { 'Cache-Control': 'no-cache' } });
+  const res = await (fetchImpl || fetch)(url, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(10000) }); // bounded: a hung host fails the check, never hangs it
   if (res.status !== 200) throw new Error('GET ' + url + ' returned HTTP ' + res.status);
   const body = await res.json();
   if (body.status !== 'ok') throw new Error('health status is ' + JSON.stringify(body.status) + ', expected "ok"');

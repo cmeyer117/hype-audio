@@ -94,6 +94,7 @@
       if (!remote || typeof remote !== 'object') return false;
       suppressSync = true;
       let changed = false;
+      let applyHadFailure = false;
       // True when the merged result pulls in a local-only entry the server
       // hasn't seen yet (e.g. an offline edit made before this fetch/realtime
       // payload landed). Both call sites set lastSyncedJson to the raw remote
@@ -122,13 +123,21 @@
                   applyFailLogged = true;
                   console.error('hype sync: could not apply remote state for ' + k, e);
                 }
-                statusState.applyFailed = true;
-                updateStatus();
               } catch (e2) {}
+              applyHadFailure = true;
+              statusState.applyFailed = true;
+              try { updateStatus(); } catch (e3) {}
             }
           }
         }
       } finally { suppressSync = false; }
+      // Only a completed inbound apply clears the failure (never a push). While it stays set, pushNow
+      // refuses to send local state, which may be stale for the key that could not be written.
+      if (!applyHadFailure && statusState.applyFailed) {
+        statusState.applyFailed = false;
+        applyFailLogged = false;
+        try { updateStatus(); } catch (e) {}
+      }
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }
       if (divergesFromRemote) schedulePush();
       return changed;
@@ -198,6 +207,9 @@
     async function pushNow(attempt) {
       attempt = attempt || 0;
       if (!supa || !syncReady) return;
+      // A remote value was not applied locally: local state may be stale, so do not push it. The next
+      // refetch/realtime event retries the apply; the status stays retrying meanwhile.
+      if (statusState.applyFailed) { updateStatus(); return; }
       const state = collect();
       if (isTrivial(state)) return;
       const json = JSON.stringify(state);
@@ -227,6 +239,7 @@
           if (pull.error) { error = pull.error; status = pull.status; break; }
           cloudUpdatedAt = (pull.data && pull.data.updated_at) || null;
           if (pull.data && pull.data.data) { lastSyncedJson = JSON.stringify(pull.data.data); applyRemote(pull.data.data); }
+          if (statusState.applyFailed) { error = null; sendJson = null; break; } // pulled value not applied: do not send stale local state
           sendState = collect(); sendJson = JSON.stringify(sendState);
           if (isTrivial(sendState) || sendJson === lastSyncedJson) { error = null; break; } // merge left nothing to send
         }
@@ -234,13 +247,12 @@
         error = e;
       }
       statusState.pushInFlight = false;
+      if (!error && sendJson === null) { updateStatus(); return; } // aborted by a failed apply; nothing was sent
       if (!error) {
         lastSyncedJson = sendJson;
         lastSyncedAt = Date.now();
         statusState.retrying = false;
         statusState.blocked = false;
-        statusState.applyFailed = false;
-        applyFailLogged = false;
         updateStatus();
         return;
       }
@@ -266,7 +278,7 @@
     // can fire repeatedly on mobile (app-switcher taps, lock/unlock).
     let lastFlushAt = 0;
     function flushOnUnload() {
-      if (!syncReady) return;
+      if (!syncReady || statusState.applyFailed) return;
       // With hype-auth.js loaded the bearer MUST be the owner's session token; a missing one
       // means "not signed in right now", so decline to flush rather than fall back to the
       // anon key (an explicitly forbidden anonymous write). Legacy copies without hype-auth.js
@@ -308,7 +320,7 @@
           },
           body: req.body,
           keepalive: true,
-        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; statusState.applyFailed = false; applyFailLogged = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     let channelSubscribed = false;
@@ -337,14 +349,14 @@
         if (!error) {
           syncReady = true;
           statusState.initFailed = false;
-          statusState.applyFailed = false;
-          applyFailLogged = false;
           cloudUpdatedAt = (data && data.updated_at) || null; // CAS token for the next write
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
             lastSyncedAt = Date.now();
             applyRemote(data.data);
           } else if (Object.keys(collect()).length > 0) {
+            statusState.applyFailed = false; // empty remote: nothing left to apply
+            applyFailLogged = false;
             schedulePush();
           }
           updateStatus();
@@ -364,7 +376,7 @@
           }, (payload) => {
             if (!payload.new || !payload.new.data) return;
             const incoming = JSON.stringify(payload.new.data);
-            if (incoming === lastSyncedJson) return;
+            if (incoming === lastSyncedJson && !statusState.applyFailed) return; // a failed apply must be retried
             lastSyncedJson = incoming;
             applyRemote(payload.new.data); // merged synchronously, so this version is now the one we have seen
             if (payload.new.updated_at) cloudUpdatedAt = payload.new.updated_at;

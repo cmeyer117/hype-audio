@@ -101,6 +101,7 @@
       // local data would never get pushed back until some unrelated key
       // happened to change later -- confirmed real via Codex audit 2026-08-20.
       let divergesFromRemote = false;
+      let applyHadFailure = false;
       try {
         for (const k of Object.keys(remote)) {
           if (!matches(k)) continue;
@@ -116,7 +117,8 @@
           if (local !== incoming) {
             try { origSet(k, incoming); changed = true; } catch (e) {
               // Full or blocked store: the app keeps stale data. Log once per streak and show the
-              // retrying status (re-armed when a sync succeeds). Reporting must never throw.
+              // retrying status (re-armed when an inbound apply succeeds). Reporting must never throw.
+              applyHadFailure = true;
               try {
                 if (!applyFailLogged) {
                   applyFailLogged = true;
@@ -129,6 +131,13 @@
           }
         }
       } finally { suppressSync = false; }
+      // Only a completed inbound apply clears applyFailed (never a push), then pushing resumes.
+      if (!applyHadFailure && statusState.applyFailed) {
+        statusState.applyFailed = false;
+        applyFailLogged = false;
+        updateStatus();
+        schedulePush(); // local edits made while pushes were held back
+      }
       if (changed && typeof onApplied === 'function') { try { onApplied(); } catch (e) {} }
       if (divergesFromRemote) schedulePush();
       return changed;
@@ -198,6 +207,9 @@
     async function pushNow(attempt) {
       attempt = attempt || 0;
       if (!supa || !syncReady) return;
+      // A remote value was never applied, so local state may be stale: do not push it over the newer remote.
+      // The next refetch/realtime event retries the apply; a successful apply resumes pushing.
+      if (statusState.applyFailed) return;
       const state = collect();
       if (isTrivial(state)) return;
       const json = JSON.stringify(state);
@@ -234,13 +246,16 @@
         error = e;
       }
       statusState.pushInFlight = false;
+      if (statusState.applyFailed) {
+        // A conflict-pull apply failed mid-push: the merged state is not safe to treat as synced.
+        updateStatus();
+        return;
+      }
       if (!error) {
         lastSyncedJson = sendJson;
         lastSyncedAt = Date.now();
         statusState.retrying = false;
         statusState.blocked = false;
-        statusState.applyFailed = false;
-        applyFailLogged = false;
         updateStatus();
         return;
       }
@@ -266,7 +281,7 @@
     // can fire repeatedly on mobile (app-switcher taps, lock/unlock).
     let lastFlushAt = 0;
     function flushOnUnload() {
-      if (!syncReady) return;
+      if (!syncReady || statusState.applyFailed) return;
       // With hype-auth.js loaded the bearer MUST be the owner's session token; a missing one
       // means "not signed in right now", so decline to flush rather than fall back to the
       // anon key (an explicitly forbidden anonymous write). Legacy copies without hype-auth.js
@@ -308,7 +323,7 @@
           },
           body: req.body,
           keepalive: true,
-        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; statusState.applyFailed = false; applyFailLogged = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
+        }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
     let channelSubscribed = false;
@@ -337,14 +352,17 @@
         if (!error) {
           syncReady = true;
           statusState.initFailed = false;
-          statusState.applyFailed = false;
-          applyFailLogged = false;
           cloudUpdatedAt = (data && data.updated_at) || null; // CAS token for the next write
           if (data && data.data && Object.keys(data.data).length > 0) {
             lastSyncedJson = JSON.stringify(data.data);
             lastSyncedAt = Date.now();
-            applyRemote(data.data);
-          } else if (Object.keys(collect()).length > 0) {
+            applyRemote(data.data); // clears applyFailed only if every write succeeds
+          } else {
+            // Nothing inbound to apply, so nothing is outstanding.
+            statusState.applyFailed = false;
+            applyFailLogged = false;
+          }
+          if (!(data && data.data && Object.keys(data.data).length > 0) && Object.keys(collect()).length > 0) {
             schedulePush();
           }
           updateStatus();
@@ -364,7 +382,7 @@
           }, (payload) => {
             if (!payload.new || !payload.new.data) return;
             const incoming = JSON.stringify(payload.new.data);
-            if (incoming === lastSyncedJson) return;
+            if (incoming === lastSyncedJson && !statusState.applyFailed) return; // failed apply: retry it
             lastSyncedJson = incoming;
             applyRemote(payload.new.data); // merged synchronously, so this version is now the one we have seen
             if (payload.new.updated_at) cloudUpdatedAt = payload.new.updated_at;
@@ -385,6 +403,7 @@
     // initial pull before allowing any local data to reach the cloud.
     function retryInit() {
       if (!syncReady && statusState.initFailed) init();
+      else if (syncReady && statusState.applyFailed) init(); // refetch and retry the failed apply
     }
     window.addEventListener('online', retryInit);
     window.addEventListener('beforeunload', flushOnUnload);

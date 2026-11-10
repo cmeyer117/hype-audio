@@ -707,6 +707,19 @@ assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'spe
   store[evKey] = '[]';
 })();
 
+// the 2000-event cap keeps the current pin too (keepPin after the count slice)
+(function () {
+  const evKey = 'hype_audio_events';
+  const base = Date.now() - 5 * 86400000;
+  const seeded = [{ id: 'pin|tp1|old', type: 'pin', clipId: 'tp1', at: Date.now() - 30 * 86400000, updated_at: Date.now() - 30 * 86400000 }];
+  for (let i = 0; i < 2000; i++) seeded.push({ id: 'tp2|play|' + i, type: 'play', clipId: 'tp2', at: base + i, updated_at: base + i });
+  store[evKey] = JSON.stringify(seeded);
+  HypeAudio.playClip(HypeAudio.listClips().find((c) => c.id === 'tp2'));
+  assertEqual(HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id, 'tp1', 'the cap prune never drops the current pin');
+  assertEqual(JSON.parse(store[evKey]).length <= 2001, true, 'the capped log stays at most 2001 events (cap + re-added pin)');
+  store[evKey] = '[]';
+})();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

@@ -953,6 +953,16 @@
   // 90 days) that only bites if something is logging way more than expected.
   var EVENT_MAX_COUNT = 2000;
 
+  // The clip most recently played that still exists: what Home's "Continue last cue" starts. Null with no plays.
+  function lastCue() {
+    var byId = {};
+    listActiveClips().forEach(function (c) { byId[c.id] = c; });
+    var plays = listHypeEvents().filter(function (e) { return e && e.type === 'play' && byId[e.clipId]; });
+    if (!plays.length) return null;
+    plays.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    return byId[plays[0].clipId];
+  }
+
   function listHypeEvents() {
     try { return JSON.parse(localStorage.getItem(EVENTS_LS_KEY) || '[]'); }
     catch (e) { return []; }
@@ -1191,6 +1201,7 @@
       explainQueuePick: explainQueuePick,
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
+      lastCue: lastCue,
       logHypeEvent: logHypeEvent,
       logFocusSessionOutcome: logFocusSessionOutcome,
     };
@@ -1250,6 +1261,7 @@
       explainQueuePick: explainQueuePick,
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
+      lastCue: lastCue,
       logHypeEvent: logHypeEvent,
       logFocusSessionOutcome: logFocusSessionOutcome,
     };

@@ -102,6 +102,10 @@
   .random-play:active { transform: scale(.98); }
   .random-play:hover { filter: brightness(1.08); }
 
+  #play-first { margin: 4px 0 18px; }
+  #play-first-btn { width: 100%; padding: 16px; border-radius: 12px; border: 0; background: var(--text-primary); color: #0a0a0a; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+  #play-first .moment-row { margin-bottom: 0; }
+  #play-first .moment-btn { flex: 1; }
   .moment-row { display: flex; gap: 10px; margin-bottom: 22px; }
   .moment-btn {
     flex: 1; padding: 14px 8px; border: 1px solid var(--border-strong); border-radius: 12px;
@@ -302,6 +306,10 @@
   <div id="view-home">
     <div class="home-eyebrow">Mental Armory</div>
     <h1 class="dash-title">Hype Audio</h1>
+    <section id="play-first" aria-label="Play a cue">
+      <button type="button" id="play-first-btn"></button>
+      <div class="moment-row" id="play-first-row"></div>
+    </section>
     <button type="button" id="sync-status-indicator" disabled style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></button>
     <input type="search" id="global-search-input" aria-label="Search everything you've said" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
@@ -681,6 +689,35 @@
         }
         tile.onclick = function () { showSubcats(key); };
         tiles.appendChild(tile);
+      });
+
+      // Play decision first (2026-11-09): one primary button, three secondary shortcuts; the full rows stay below.
+      const firstBtn = document.getElementById('play-first-btn');
+      const current = HypeAudio.getCurrentClip();
+      const last = HypeAudio.lastCue();
+      const hasClips = HypeAudio.listActiveClips().length > 0;
+      firstBtn.textContent = current ? '■ Stop' + (current.title ? ': ' + current.title : '')
+        : !hasClips ? 'No cues here yet. Add one'
+        : last ? '▶ Continue: ' + (last.title || 'last cue') : '▶ Play a cue';
+      firstBtn.onclick = function () {
+        if (current) { HypeAudio.stopPlayback(); return; }
+        if (!hasClips) { document.getElementById('open-add').click(); return; }
+        if (last) { HypeAudio.playClip(last, { useCase: last.use_case, deliveryRole: last.delivery_role }); return; }
+        if (!HypeAudio.playRandomLoop({ moment: 'mid_set' }) && !HypeAudio.playRandomLoop({})) alert('No cue available yet.');
+      };
+      const firstRow = document.getElementById('play-first-row');
+      firstRow.innerHTML = '';
+      [
+        { label: 'Gym cues', run: function () { return HypeAudio.playRandomLoop({ moment: 'mid_set' }); } },
+        { label: 'Reset', run: function () { return HypeAudio.playRandomLoop({ stateMode: 'post_failure_reset' }); } },
+        { label: 'Focus', run: function () { document.getElementById('focus-details').scrollIntoView({ behavior: 'smooth' }); return true; } },
+      ].forEach(function (o) {
+        const b = document.createElement('button');
+        b.className = 'moment-btn';
+        b.type = 'button';
+        b.textContent = o.label;
+        b.onclick = function () { if (!o.run()) alert('No ' + o.label.toLowerCase() + ' clips yet.'); };
+        firstRow.appendChild(b);
       });
 
       const MOMENTS = [

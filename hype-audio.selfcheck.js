@@ -637,6 +637,21 @@ assertEqual(HypeAudio.pickRandom({ mentality: 'speechtest-charge' }), null, 'pic
 assertEqual(HypeAudio.pickRandom({ pillar: 'speeches' }).id, 'speech1', 'pickRandom(pillar:speeches) still finds it');
 assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'speechtest-charge' }).id, 'speech1', 'a pillar list that includes speeches finds it');
 
+// lastCue: the newest play event whose clip still exists and is not deleted (Home "Continue last cue", 2026-11-09)
+(function () {
+  const key = Object.keys(store).find((k) => /events/.test(k));
+  const evKey = key || 'hype_audio_events';
+  store[evKey] = JSON.stringify([
+    { id: 'a', type: 'play', clipId: '1', at: 1000 },
+    { id: 'b', type: 'play', clipId: '2', at: 3000 },
+    { id: 'c', type: 'focus_session_outcome', at: 4000 },
+    { id: 'd', type: 'play', clipId: 'gone', at: 5000 },
+  ]);
+  assertEqual(HypeAudio.lastCue() && HypeAudio.lastCue().id, '2', 'lastCue skips non-play events and clips that no longer exist');
+  store[evKey] = '[]';
+  assertEqual(HypeAudio.lastCue(), null, 'lastCue is null with no plays');
+})();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

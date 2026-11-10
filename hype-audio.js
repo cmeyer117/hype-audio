@@ -953,6 +953,20 @@
   // 90 days) that only bites if something is logging way more than expected.
   var EVENT_MAX_COUNT = 2000;
 
+  // The workout cue Row plays from its Play cue button. A pinned_at timestamp on the clip (not a boolean) so two devices that pin
+  // different clips resolve by the newest, and the field rides the existing clip sync.
+  function pinnedCue() {
+    var pins = listActiveClips().filter(function (c) { return c.pinned_at; });
+    pins.sort(function (a, b) { return b.pinned_at - a.pinned_at; });
+    return pins[0] || null;
+  }
+  // Pins this clip, or clears every pin when it is already the pinned one.
+  function pinCue(id) {
+    var cur = pinnedCue();
+    listClips().forEach(function (c) { if (c.pinned_at && c.id !== id) updateClip(c.id, { pinned_at: null }); });
+    updateClip(id, { pinned_at: cur && cur.id === id ? null : Date.now() });
+  }
+
   // The clip most recently played that still exists: what Home's "Continue last cue" starts. Null with no plays.
   function lastCue() {
     var byId = {};
@@ -1202,6 +1216,8 @@
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
       lastCue: lastCue,
+      pinnedCue: pinnedCue,
+      pinCue: pinCue,
       logHypeEvent: logHypeEvent,
       logFocusSessionOutcome: logFocusSessionOutcome,
     };
@@ -1262,6 +1278,8 @@
       submitQueueFeedback: submitQueueFeedback,
       listHypeEvents: listHypeEvents,
       lastCue: lastCue,
+      pinnedCue: pinnedCue,
+      pinCue: pinCue,
       logHypeEvent: logHypeEvent,
       logFocusSessionOutcome: logFocusSessionOutcome,
     };

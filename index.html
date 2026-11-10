@@ -229,6 +229,7 @@
     color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
   .nowplaying-btn:hover { background: rgba(255,255,255,0.1); }
+  .nowplaying-btn.active { background: var(--text-primary); color: #0a0a0a; }
   .nowplaying-explain {
     display: flex; align-items: center; gap: 6px; padding-left: 2px;
   }
@@ -512,6 +513,7 @@
         <span class="nowplaying-title" id="nowplaying-title"></span>
         <button class="nowplaying-btn" id="nowplaying-toggle" type="button" aria-label="Pause playback">⏸</button>
         <button class="nowplaying-btn" id="nowplaying-stop" type="button" aria-label="Stop playback">■</button>
+        <button class="nowplaying-btn" id="nowplaying-pin" type="button" aria-label="Pin as workout cue" title="Pin as the cue Row plays in your workout">📌</button>
       </div>
       <div class="nowplaying-explain">
         <span class="nowplaying-explain-text" id="nowplaying-explain-text"></span>
@@ -694,11 +696,12 @@
       // Play decision first (2026-11-09): one primary button, three secondary shortcuts; the full rows stay below.
       const firstBtn = document.getElementById('play-first-btn');
       const current = HypeAudio.getCurrentClip();
-      const last = HypeAudio.lastCue();
+      const pinned = HypeAudio.pinnedCue();
+      const last = pinned || HypeAudio.lastCue();
       const hasClips = HypeAudio.listActiveClips().length > 0;
       firstBtn.textContent = current ? '■ Stop' + (current.title ? ': ' + current.title : '')
         : !hasClips ? 'No cues here yet. Add one'
-        : last ? '▶ Continue: ' + (last.title || 'last cue') : '▶ Play a cue';
+        : last ? (pinned ? '▶ Pinned cue: ' : '▶ Continue: ') + (last.title || 'last cue') : '▶ Play a cue';
       firstBtn.onclick = function () {
         if (current) { HypeAudio.stopPlayback(); return; }
         if (!hasClips) { document.getElementById('open-add').click(); return; }
@@ -1411,6 +1414,10 @@
       let explanation = '';
       try { explanation = HypeAudio.explainQueuePick(clip, HypeAudio.getPlaybackContext()) || ''; } catch (e) {}
       document.getElementById('nowplaying-explain-text').textContent = explanation;
+      const pinBtn = document.getElementById('nowplaying-pin');
+      const isPinned = !!(HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id === clip.id);
+      pinBtn.classList.toggle('active', isPinned);
+      pinBtn.setAttribute('aria-label', isPinned ? 'Unpin workout cue' : 'Pin as workout cue');
       document.getElementById('nowplaying-thumbs-up').classList.toggle('active', !!clip.favorite);
       document.getElementById('nowplaying-thumbs-down').classList.toggle('active', HypeAudio.isOnCooldown(clip));
     }
@@ -1419,6 +1426,10 @@
       if (clip) HypeAudio.togglePlay(clip);
     };
     document.getElementById('nowplaying-stop').onclick = function () { HypeAudio.stopPlayback(); };
+    document.getElementById('nowplaying-pin').onclick = function () {
+      const clip = HypeAudio.getCurrentClip();
+      if (clip) { HypeAudio.pinCue(clip.id); renderNowPlaying(); renderHome(); }
+    };
     document.getElementById('nowplaying-thumbs-up').onclick = function () {
       const clip = HypeAudio.getCurrentClip();
       if (clip) { HypeAudio.submitQueueFeedback(clip.id, 'up'); renderNowPlaying(); }

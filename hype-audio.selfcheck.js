@@ -652,6 +652,22 @@ assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'spe
   assertEqual(HypeAudio.lastCue(), null, 'lastCue is null with no plays');
 })();
 
+// pinned workout cue: newest pinned_at wins, unpin clears it, a deleted clip is never the pin (2026-11-09)
+(function () {
+  const id = () => HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id;
+  assertEqual(id(), null, 'no pin to start');
+  HypeAudio.pinCue('1');
+  assertEqual(id(), '1', 'pin one clip');
+  HypeAudio.pinCue('2');
+  assertEqual(id(), '2', 'pinning another clip moves the pin');
+  HypeAudio.updateClip('1', { pinned_at: Date.now() + 5000 }); // a second device pinned later
+  assertEqual(id(), '1', 'the newest pinned_at wins when two pins arrive from sync');
+  HypeAudio.pinCue('1'); // toggle off
+  assertEqual(id(), null, 'toggling the pinned clip unpins every pin');
+  HypeAudio.pinCue('2'); HypeAudio.deleteClip('2');
+  assertEqual(id(), null, 'a deleted clip is not the pin');
+})();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

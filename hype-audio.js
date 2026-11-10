@@ -953,18 +953,21 @@
   // 90 days) that only bites if something is logging way more than expected.
   var EVENT_MAX_COUNT = 2000;
 
-  // The workout cue Row plays from its Play cue button. A pinned_at timestamp on the clip (not a boolean) so two devices that pin
-  // different clips resolve by the newest, and the field rides the existing clip sync.
+  // The workout cue Row plays from its Play cue button: the newest 'pin' event in the shared play log (clipId null = unpinned).
+  // Append-only on purpose. A flag on the clip would bump its updated_at, and whole-clip last-write-wins would then let a stale
+  // device erase a clip edit, or a play_count write undo the pin (Codex review 2026-11-09). Pins age out with the 90-day log.
   function pinnedCue() {
-    var pins = listActiveClips().filter(function (c) { return c.pinned_at; });
-    pins.sort(function (a, b) { return b.pinned_at - a.pinned_at; });
-    return pins[0] || null;
+    var best = null;
+    listHypeEvents().forEach(function (e) {
+      if (e && e.type === 'pin' && typeof e.at === 'number' && (!best || e.at >= best.at)) best = e;
+    });
+    if (!best || !best.clipId) return null;
+    return listActiveClips().find(function (c) { return c.id === best.clipId; }) || null;
   }
-  // Pins this clip, or clears every pin when it is already the pinned one.
+  // Pins this clip, or unpins when it is already the pinned one.
   function pinCue(id) {
-    var cur = pinnedCue();
-    listClips().forEach(function (c) { if (c.pinned_at && c.id !== id) updateClip(c.id, { pinned_at: null }); });
-    updateClip(id, { pinned_at: cur && cur.id === id ? null : Date.now() });
+    var cid = pinnedCue() && pinnedCue().id === id ? null : id;
+    appendHypeEvent(function (now) { return { id: 'pin|' + (cid || 'none') + '|' + now, type: 'pin', clipId: cid }; });
   }
 
   // The clip most recently played that still exists: what Home's "Continue last cue" starts. Null with no plays.

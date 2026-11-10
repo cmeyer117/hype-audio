@@ -276,6 +276,7 @@ assertEqual(HypeAudio.getCurrentClip(), null, 'getCurrentClip is null after stop
 // the same listen), and accumulates across repeat-mode restarts (the old
 // code re-read a stale clip snapshot, so repeats never accumulated).
 const countClipBefore = HypeAudio.listClips().find(c => c.id === 'fav1').play_count || 0;
+store.hype_audio = JSON.stringify(HypeAudio.listClips().map(c => c.id === 'fav1' ? { ...c, updated_at: 100 } : c));
 const countAudio = HypeAudio.playClip(npClip);
 countAudio.onplay();
 countAudio.onplay(); // simulated resume after pause
@@ -283,6 +284,7 @@ assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').play_count, countCl
 const repeatAudio = HypeAudio.playRepeat(npClip);
 repeatAudio.onplay();
 assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').play_count, countClipBefore + 2, 'play_count accumulates across plays via a fresh read, not the stale clip snapshot');
+assertEqual(HypeAudio.listClips().find(c => c.id === 'fav1').updated_at, 100, 'playback leaves the clip metadata revision alone');
 HypeAudio.stopPlayback();
 
 // onerror skip-ahead -- a broken storage_url used to silently kill the
@@ -668,9 +670,8 @@ assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'spe
   ev.push({ id: 'pin|1|late', type: 'pin', clipId: '1', at: Date.now() + 5000, updated_at: Date.now() + 5000 }); // a later pin from another device
   store[evKey] = JSON.stringify(ev);
   assertEqual(id(), '1', 'the newest pin event wins after sync');
-  HypeAudio.pinCue('2'); // tapping the pinned clip toggles; here the newest event is a pin on 1, so this re-pins 2 at the real now
-  store[evKey] = JSON.stringify(JSON.parse(store[evKey]).filter((e) => e.id !== 'pin|1|late')); // appending prunes future-dated events (clock-skew guard)
-  assertEqual(id(), '2', 'after the late pin is gone the latest real pin wins');
+  HypeAudio.pinCue('2');
+  assertEqual(id(), '2', 'a deliberate pin wins over the already-observed fast device pin');
   HypeAudio.pinCue('2'); // now 2 is the pinned clip, so tapping it unpins
   assertEqual(id(), null, 'tapping the pinned clip unpins it');
   ev.length = 0; ev.push(...JSON.parse(store[evKey]));

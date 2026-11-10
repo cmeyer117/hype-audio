@@ -132,4 +132,10 @@ assertEqual(isPermissionError({ message: 'oops' }, undefined), false, 'no status
 // The unload-flush path (raw fetch) must also flag a 401/403 instead of dropping it silently.
 assertEqual(/else if \(resp\.status === 401 \|\| resp\.status === 403\) \{ statusState\.blocked = true;/.test(src), true, 'flushOnUnload marks a 401/403 response as blocked');
 
+const editedClip = { id: 'cue', title: 'new title', updated_at: 20, play_count: 5 };
+const playedClip = { id: 'cue', title: 'old title', updated_at: 10, play_count: 6 };
+const combinedClip = { ...editedClip, play_count: 6 };
+assertEqual(mergeArrays([editedClip], [playedClip], 'hype_audio'), [combinedClip], 'a newer cue edit and a playback count merge independently');
+assertEqual(mergeArrays([playedClip], [editedClip], 'hype_audio'), [combinedClip], 'cue merge is independent of delivery direction');
+
 console.log('sync.selfcheck.js: all assertions passed');

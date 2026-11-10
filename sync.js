@@ -66,7 +66,7 @@
       origRemove(k);
       try { if (!suppressSync && matches(k)) schedulePush(); } catch (e) {}
     };
-    function mergeArrays(remoteArr, localArr) {
+    function mergeArrays(remoteArr, localArr, keyName) {
       const byKey = new Map();
       for (const entry of [...remoteArr, ...localArr]) {
         const key = entry && typeof entry === 'object' && 'id' in entry ? entry.id : JSON.stringify(entry);
@@ -86,7 +86,12 @@
         // updated_at (older entries) sorts as oldest.
         const existingTs = (existing && existing.updated_at) || 0;
         const entryTs = (entry && entry.updated_at) || 0;
-        if (entryTs > existingTs) byKey.set(key, entry);
+        const entryWins = entryTs > existingTs;
+        const winner = entryWins ? entry : existing;
+        const other = entryWins ? existing : entry;
+        if (keyName === 'hype_audio' && winner?.id && !winner.deleted && typeof other?.play_count === 'number' && other.play_count > (winner.play_count || 0)) {
+          byKey.set(key, { ...winner, play_count: other.play_count });
+        } else if (entryWins) byKey.set(key, winner);
       }
       return Array.from(byKey.values());
     }
@@ -109,7 +114,7 @@
           if (Array.isArray(incomingValue)) {
             let localValue = [];
             try { localValue = JSON.parse(localStorage.getItem(k) || '[]'); } catch (e) {}
-            if (Array.isArray(localValue)) incomingValue = mergeArrays(incomingValue, localValue);
+            if (Array.isArray(localValue)) incomingValue = mergeArrays(incomingValue, localValue, k);
           }
           const incoming = JSON.stringify(incomingValue);
           if (incoming !== JSON.stringify(remote[k])) divergesFromRemote = true;

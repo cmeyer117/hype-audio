@@ -24,11 +24,12 @@
     saveClips(clips);
   }
 
-  function updateClip(id, patch) {
+  function updateClip(id, patch, touchMetadata = true) {
     const clips = listClips();
     const idx = clips.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    clips[idx] = Object.assign({}, clips[idx], patch, { updated_at: Date.now() });
+    clips[idx] = Object.assign({}, clips[idx], patch);
+    if (touchMetadata) clips[idx].updated_at = Date.now();
     saveClips(clips);
   }
 
@@ -573,7 +574,8 @@
         // Fresh read, not clip.play_count -- `clip` can be a stale snapshot
         // (repeat mode reuses one object forever, so counts never accumulated).
         const fresh = listClips().find(function (c) { return c.id === clip.id; });
-        updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 });
+        // Playback counts merge independently of the metadata revision.
+        updateClip(clip.id, { play_count: ((fresh && fresh.play_count) || 0) + 1 }, false);
         logHypeEvent('play', clip, eventContext);
         recentlyPlayed.push(clip.id);
         if (recentlyPlayed.length > RECENT_WINDOW) recentlyPlayed.shift();
@@ -955,7 +957,7 @@
 
   // The workout cue Row plays from its Play cue button: the newest 'pin' event in the shared play log (clipId null = unpinned).
   // Append-only on purpose. A flag on the clip would bump its updated_at, and whole-clip last-write-wins would then let a stale
-  // device erase a clip edit, or a play_count write undo the pin (Codex review 2026-11-09). Pins age out with the 90-day log.
+  // device erase a clip edit, or a play_count write undo the pin (Codex review 2026-11-09). The current pin survives pruning.
   function pinnedCue() {
     var best = newestPin(listHypeEvents());
     if (!best || !best.clipId) return null;
@@ -963,8 +965,13 @@
   }
   // Pins this clip, or unpins when it is already the pinned one.
   function pinCue(id) {
-    var cid = pinnedCue() && pinnedCue().id === id ? null : id;
-    appendHypeEvent(function (now) { return { id: 'pin|' + (cid || 'none') + '|' + now, type: 'pin', clipId: cid }; });
+    appendHypeEvent(function (now, all) {
+      var previous = newestPin(all);
+      var cid = previous && previous.clipId === id ? null : id;
+      // A synced pin from a faster clock must not block a new choice on this device.
+      var at = previous ? Math.max(now, previous.at + 1) : now;
+      return { id: 'pin|' + (cid || 'none') + '|' + at, type: 'pin', clipId: cid, at: at };
+    });
   }
 
   // The clip most recently played that still exists: what Home's "Continue last cue" starts. Null with no plays.
@@ -984,7 +991,7 @@
 
   // The one write path for the event log: prune by age (dropping corrupt or
   // future-dated entries, whose age-diff would otherwise pass), append,
-  // enforce the hard cap, persist. `build(now)` returns the entry so both
+  // enforce the hard cap, persist. `build(now, all)` returns the entry so both
   // loggers below share the exact same pruning rules instead of two copies
   // that could drift. Swallows storage errors -- a logging failure must
   // never throw back into the playback/click path that triggered it.
@@ -1012,7 +1019,10 @@
       var events = all.filter(function (e) {
         return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
       });
-      events.push(Object.assign(build(now), { at: now, updated_at: now }));
+      var event = build(now, all);
+      event.at = event.at ?? now;
+      event.updated_at = event.at;
+      events.push(event);
       if (events.length > EVENT_MAX_COUNT) {
         events = events.slice(events.length - EVENT_MAX_COUNT);
       }

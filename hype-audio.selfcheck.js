@@ -685,6 +685,27 @@ assertEqual(HypeAudio.pickRandom({ pillar: ['iron', 'speeches'], mentality: 'spe
   store[evKey] = '[]';
 })();
 
+// pin tiebreak and pruning (Codex review 2026-11-09)
+(function () {
+  const evKey = 'hype_audio_events';
+  const pin = (clipId, at) => ({ id: 'pin|' + (clipId || 'none') + '|' + at, type: 'pin', clipId, at, updated_at: at });
+  HypeAudio.addClip({ id: 'tp1', title: 'T1', mentality: 'dorian', play_count: 0 });
+  HypeAudio.addClip({ id: 'tp2', title: 'T2', mentality: 'dorian', play_count: 0 });
+  store[evKey] = JSON.stringify([pin('tp1', 5000), pin('tp2', 5000)]);
+  const tieA = HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id;
+  store[evKey] = JSON.stringify([pin('tp2', 5000), pin('tp1', 5000)]);
+  assertEqual(HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id, tieA, 'two pins at the same instant resolve the same way in any order');
+  store[evKey] = JSON.stringify([pin('tp1', Date.now() - 100 * 86400000)]);
+  HypeAudio.pinCue('tp2'); HypeAudio.pinCue('tp2'); // pin then unpin tp2: two appends
+  store[evKey] = JSON.stringify([pin('tp1', Date.now() - 100 * 86400000)]);
+  HypeAudio.playClip(HypeAudio.listClips().find((c) => c.id === 'tp2'));
+  assertEqual(HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id, 'tp1', 'logging a play never prunes the current pin, however old');
+  store[evKey] = JSON.stringify([pin('tp1', Date.now() + 60000)]);
+  HypeAudio.playClip(HypeAudio.listClips().find((c) => c.id === 'tp2'));
+  assertEqual(HypeAudio.pinnedCue() && HypeAudio.pinnedCue().id, 'tp1', 'nor a future-dated one');
+  store[evKey] = '[]';
+})();
+
 // uploadClipFile rejects a 0-byte file before ever hitting the network --
 // neither the signed-URL flow nor the Storage bucket's file_size_limit
 // (a maximum only) reject an empty file otherwise.

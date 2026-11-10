@@ -957,10 +957,7 @@
   // Append-only on purpose. A flag on the clip would bump its updated_at, and whole-clip last-write-wins would then let a stale
   // device erase a clip edit, or a play_count write undo the pin (Codex review 2026-11-09). Pins age out with the 90-day log.
   function pinnedCue() {
-    var best = null;
-    listHypeEvents().forEach(function (e) {
-      if (e && e.type === 'pin' && typeof e.at === 'number' && (!best || e.at >= best.at)) best = e;
-    });
+    var best = newestPin(listHypeEvents());
     if (!best || !best.clipId) return null;
     return listActiveClips().find(function (c) { return c.id === best.clipId; }) || null;
   }
@@ -991,16 +988,35 @@
   // loggers below share the exact same pruning rules instead of two copies
   // that could drift. Swallows storage errors -- a logging failure must
   // never throw back into the playback/click path that triggered it.
+  // The newest pin event: by `at`, ties broken by id, so every replica resolves the same pin whatever order its log is in
+  // (Codex review 2026-11-09). Shared rule with the other app's copy of this player.
+  function newestPin(events) {
+    var best = null;
+    events.forEach(function (e) {
+      if (e && e.type === 'pin' && typeof e.at === 'number'
+        && (!best || e.at > best.at || (e.at === best.at && String(e.id) > String(best.id)))) best = e;
+    });
+    return best;
+  }
+  // The play-log prune (age, future-dated, count cap) never drops the current pin: dropping it locally and getting it back from a
+  // remote copy made the pin vanish and return (Codex review 2026-11-09).
+  function keepPin(pruned, all) {
+    var pin = newestPin(all);
+    return pin && pruned.indexOf(pin) === -1 ? [pin].concat(pruned) : pruned;
+  }
+
   function appendHypeEvent(build) {
     try {
       var now = Date.now();
-      var events = listHypeEvents().filter(function (e) {
+      var all = listHypeEvents();
+      var events = all.filter(function (e) {
         return e && typeof e.at === 'number' && e.at <= now && (now - e.at) <= EVENT_RETENTION_MS;
       });
       events.push(Object.assign(build(now), { at: now, updated_at: now }));
       if (events.length > EVENT_MAX_COUNT) {
         events = events.slice(events.length - EVENT_MAX_COUNT);
       }
+      events = keepPin(events, all);
       localStorage.setItem(EVENTS_LS_KEY, JSON.stringify(events));
     } catch (e) {}
   }

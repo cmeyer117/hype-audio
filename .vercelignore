@@ -1,2 +1,11 @@
+# Only the app is served. public-surface.selfcheck.js fails if docs, tests or tooling would become public,
+# and api/function-count.selfcheck.js needs the first two lines as written.
 api/*.selfcheck.js
 mc-reports
+*.selfcheck.js
+*.md
+docs
+scripts
+tests
+.claude
+.github

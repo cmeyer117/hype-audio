@@ -13,6 +13,7 @@
 // an 8MB limit. Now it just validates the passphrase and returns a one-time
 // signed upload URL; the client PUTs the raw file straight to Storage.
 import { createClient } from '@supabase/supabase-js'
+import { sameSecret } from './_lib/same-secret.mjs'
 
 const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co'
 const BUCKET = 'hype-audio'
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Server misconfigured: HYPE_AUDIO_UPLOAD_SECRET not set' })
     return
   }
-  if (req.headers['x-upload-secret'] !== secret) {
+  if (!sameSecret(req.headers['x-upload-secret'], secret)) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }

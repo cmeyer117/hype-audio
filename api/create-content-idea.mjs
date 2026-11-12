@@ -6,6 +6,7 @@
 // server-side, gated by the same shared passphrase (one user, one secret,
 // reused rather than minting a second one for the same trust boundary).
 import { createClient } from '@supabase/supabase-js'
+import { sameSecret } from './_lib/same-secret.mjs'
 
 const SUPABASE_URL = 'https://vikpcejlyxieguorwysf.supabase.co'
 const ALLOWED_PILLARS = ['mindset', 'training', 'life', 'faith', 'diet']
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Server misconfigured: HYPE_AUDIO_UPLOAD_SECRET not set' })
     return
   }
-  if (req.headers['x-upload-secret'] !== secret) {
+  if (!sameSecret(req.headers['x-upload-secret'], secret)) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }

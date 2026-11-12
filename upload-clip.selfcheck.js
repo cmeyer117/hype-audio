@@ -12,6 +12,9 @@ async function main() {
   const importLine = /^import \{ createClient \} from '@supabase\/supabase-js'.*$/m;
   assert.ok(importLine.test(src), 'expected supabase import line');
   src = src.replace(importLine, 'const createClient = globalThis.__fakeCreateClient;');
+  // The source runs from a data: URL, which cannot resolve relative imports: point the helper import at its file.
+  const helper = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'same-secret.mjs')).href;
+  src = src.replace("'./_lib/same-secret.mjs'", `'${helper}'`);
 
   let fake;
   globalThis.__fakeCreateClient = function (url, key) {

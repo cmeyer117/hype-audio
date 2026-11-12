@@ -1,10 +1,13 @@
-// Runs every top-level *.selfcheck.js via plain `node` (scripts/ holds one-off maintenance tools, not checks).
+// Runs every top-level and api/ *.selfcheck.js via plain `node` (scripts/ holds one-off maintenance tools, not checks).
 // Same no-framework convention as Row and Steward; added 2026-11-02 so the repo has one test command
 // (engineering-standard health item 1).
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 
-const files = readdirSync(process.cwd()).filter((name) => /\.selfcheck\.js$/.test(name)).sort();
+const files = [
+  ...readdirSync(process.cwd()).filter((name) => /\.selfcheck\.js$/.test(name)).sort(),
+  ...readdirSync('api').filter((name) => /\.selfcheck\.js$/.test(name)).sort().map((name) => 'api/' + name),
+];
 let failed = 0;
 
 for (const file of files) {

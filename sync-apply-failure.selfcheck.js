@@ -20,7 +20,7 @@ function run(throwOnSet) {
     const remote = { hype_audio: [{ id: 'r1', title: 'remote clip', updated_at: 5 }] };
     const fakeSupa = {
       from: () => ({
-        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { data: remote, updated_at: 't1' }, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { data: remote, updated_at: '2026-11-17T12:00:00Z' }, error: null }) }) }),
       }),
       channel: () => ({ on() { return this; }, subscribe() { return this; } }),
     };
@@ -66,7 +66,7 @@ async function runRecovery() {
   const remote2 = { hype_audio: [{ id: 'r1', title: 'remote clip v2', updated_at: 9 }] };
   const fakeSupa = {
     from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { data: remote1, updated_at: 't1' }, error: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { data: remote1, updated_at: '2026-11-17T12:00:00Z' }, error: null }) }) }),
       update: (row) => { writes.push(row); return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ updated_at: row.updated_at }], error: null }) }) }) }; },
       insert: (row) => { writes.push(row); return { select: () => Promise.resolve({ data: [{ updated_at: row.updated_at }], error: null }) }; },
     }),
@@ -107,13 +107,13 @@ async function runRecovery() {
   if (statuses[statuses.length - 1] !== 'retrying') fail(`should still be retrying (saw: ${statuses.join(',')})`);
 
   // Next realtime event: apply still failing -> still retrying, still no push.
-  realtimeCb({ new: { data: remote1, updated_at: 't1' } });
+  realtimeCb({ new: { data: remote1, updated_at: '2026-11-17T12:00:00Z' } });
   await sleep(500);
   if (writes.length !== 0 || statuses[statuses.length - 1] !== 'retrying') fail('a repeated failing apply must keep retrying and not push');
 
   // Store recovers; the next realtime event applies, clears applyFailed, and pushing resumes.
   failApply = false;
-  realtimeCb({ new: { data: remote2, updated_at: 't2' } });
+  realtimeCb({ new: { data: remote2, updated_at: '2026-11-17T13:00:00Z' } });
   await sleep(900);
   if (!/remote clip v2/.test(store.hype_audio)) fail('a later successful apply should write the remote value');
   if (writes.length < 1) fail('pushing should resume after a successful apply');

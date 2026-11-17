@@ -20,6 +20,7 @@ function build(initialAuth, opts) {
   const store = { hype_audio: JSON.stringify([{ id: 'c1', title: 'a clip', updated_at: 1 }]) };
   const cloud = { selects: 0, upserts: 0, channels: 0 };
   const fetches = [];
+  let realtime;
   const events = {};
   const doc = { visibilityState: 'visible', handler: null, addEventListener(evt, cb) { if (evt === 'visibilitychange') this.handler = cb; } };
   let authState = initialAuth;                 // 'owner' | 'signedout' | 'unknown'
@@ -30,14 +31,14 @@ function build(initialAuth, opts) {
       select: () => ({ eq: () => ({ maybeSingle: () => {
         cloud.selects++;
         // opts.selectDelay simulates a slow initial read so a sign-out can land while it is in flight.
-        const remote = { data: opts.remoteData || null, error: opts.readError || null };
+        const remote = { data: opts.remoteData ? { data: opts.remoteData, updated_at: opts.revision || '2026-11-17T12:00:00.000001Z' } : null, error: opts.readError || null };
         return opts.selectDelay ? new Promise((r) => setTimeout(() => r(remote), opts.selectDelay)) : Promise.resolve(remote);
       } }) }),
       // the CAS write (hype-cas-write.js): insert when no cloud row was seen, conditional update when one was; both count as a push
       insert: () => ({ select: () => { cloud.upserts++; return Promise.resolve({ data: [{ updated_at: 'v1' }], error: null }); } }),
       update: () => { const c = { eq: () => c, select: () => { cloud.upserts++; return Promise.resolve({ data: [{ updated_at: 'v2' }], error: null }); } }; return c; },
     }),
-    channel: () => { cloud.channels++; return { on() { return this; }, subscribe() { return this; } }; },
+    channel: () => { cloud.channels++; return { on(_event, _filter, handler) { realtime = handler; return this; }, subscribe() { return this; } }; },
   };
   const HypeAuth = {
     getClient: () => fakeSupa,
@@ -69,12 +70,25 @@ function build(initialAuth, opts) {
   sandbox.window.initCloudSync({ appKey: 'hype-audio', syncedKeys: ['hype_audio', 'hype_audio_events'], onStatusChange: (s) => statuses.push(s) });
   return {
     statuses, cloud, fetches, store, doc, events,
+    receive: (row) => realtime({ new: row }),
     setAuth: (state, tok) => { authState = state; token = tok || null; },
     fire: (session) => listeners.forEach((cb) => cb(session)),
   };
 }
 
 (async () => {
+  {
+    const key = 'hype_audio';
+    const t = build('owner', { remoteData: { [key]: [{ id: 'c1', title: 'new', updated_at: 9 }] } });
+    await sleep(100);
+    // Higher item stamps would beat merge order without the row-revision guard.
+    for (const updated_at of [null, 'invalid', '2026-11-17T11:00:00Z', '2026-11-17T12:00:00.000001Z']) {
+      t.receive({ data: { [key]: [{ id: 'c1', title: 'old', updated_at: 99 }] }, updated_at });
+      if (t.store[key].includes('old')) fail('stale realtime replaced the newer baseline');
+    }
+    t.receive({ data: { [key]: [{ id: 'c1', title: 'advancing', updated_at: 100 }] }, updated_at: '2026-11-17T12:00:00.000002Z' });
+    if (!t.store[key].includes('advancing')) fail('microsecond revision must advance');
+  }
   // 1. Signed out: local only, nothing touches the cloud.
   {
     const t = build('signedout');

@@ -15,6 +15,8 @@ async function main() {
   // The source runs from a data: URL, which cannot resolve relative imports: point the helper import at its file.
   const helper = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'same-secret.mjs')).href;
   src = src.replace("'./_lib/same-secret.mjs'", `'${helper}'`);
+  const recovery = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'upload-intents.mjs')).href;
+  src = src.replace("'./_lib/upload-intents.mjs'", `'${recovery}'`);
 
   let fake;
   globalThis.__fakeCreateClient = function (url, key) {

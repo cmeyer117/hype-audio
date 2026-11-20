@@ -462,7 +462,8 @@
 
   // Deleting a clip used to only tombstone it, leaving its audio file in the hype-audio bucket forever
   // (534 orphans / 460 MB pushed the shared project over its 1 GB quota, 2026-11-01). Removes the file
-  // with the signed-in owner session (storage policy "owner delete hype-audio"). Returns
+  // with the signed-in owner session (storage policies "owner delete hype-audio" AND "owner read
+  // hype-audio": a delete needs both, and without the read policy it matches nothing). Returns
   // 'removed' | 'in-use' | 'skip' | 'signed-out' | 'error'; anything but 'removed' leaves the file for
   // the weekly orphan guard (sunday-ledgers Part 5).
   const CLIP_PREFIX = SUPABASE_URL + '/storage/v1/object/public/hype-audio/';
@@ -477,8 +478,9 @@
     try {
       const { data } = await supa.auth.getSession();
       if (!data || !data.session) return 'signed-out';
-      const { error } = await supa.storage.from('hype-audio').remove([name]);
-      return error ? 'error' : 'removed';
+      const { data: gone, error } = await supa.storage.from('hype-audio').remove([name]);
+      // RLS hides rows without a SELECT policy and the call still succeeds with an empty list: count that as not removed.
+      return error || !Array.isArray(gone) || gone.length === 0 ? 'error' : 'removed';
     } catch {
       return 'error';
     }

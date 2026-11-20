@@ -12,12 +12,12 @@ const vm = require('vm');
 const source = fs.readFileSync(path.join(__dirname, 'sync.js'), 'utf8');
 const BASE = 'https://selfcheck.invalid/storage/v1/object/public/hype-audio/';
 
-function fakeClient(session) {
+function fakeClient(session, matchNothing) {
   const removed = [];
   return {
     removed,
     auth: { getSession: async () => ({ data: { session } }) },
-    storage: { from: (bucket) => ({ remove: async (names) => { removed.push([bucket, names]); return { data: names, error: null }; } }) },
+    storage: { from: (bucket) => ({ remove: async (names) => { removed.push([bucket, names]); return { data: matchNothing ? [] : names.map((name) => ({ name })), error: null }; } }) },
   };
 }
 
@@ -63,6 +63,13 @@ async function main() {
     eq(await w.hypeRemoveClipFile(BASE + 'a/../../x.mp3', []), 'skip', 'path segments skipped');
     eq(await w.hypeRemoveClipFile(undefined, []), 'skip', 'missing url skipped');
     eq(c.removed, [], 'nothing removed for skipped urls');
+  }
+  {
+    // Storage reports success with an empty list when RLS hides the row (the hype-audio bucket once had
+    // a DELETE policy but no SELECT policy): that is NOT a removal, so the weekly orphan guard must see it.
+    const c = fakeClient({ user: { id: 'owner' } }, true);
+    const w = load(c);
+    eq(await w.hypeRemoveClipFile(url, []), 'error', 'an empty removed list is not a removal');
   }
   {
     const c = fakeClient(null);

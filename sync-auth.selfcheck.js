@@ -2,7 +2,7 @@
 // Drives the REAL initCloudSync (sync.js) with a fake HypeAuth + fake Supabase client:
 //  - signed out  -> 'signedout', and NOTHING is read from or written to the cloud
 //  - offline     -> 'offline' (not a sign-in nag)
-//  - signs in    -> sync starts without a reload and reaches 'synced'; realtime subscribed once
+//  - signs in    -> sync starts without a reload and reaches 'synced'; no realtime channel (removed 2026-11-20, hype-audio-4)
 //  - unload flush -> the raw fetch carries the OWNER token, never the anon key
 //  - signs out   -> pushes stop and it returns to 'signedout'
 'use strict';
@@ -121,7 +121,7 @@ function build(initialAuth, opts) {
     await sleep(900);
     if (t.statuses[t.statuses.length - 1] !== 'synced') fail(`after sign-in the last status should be synced (saw: ${t.statuses.join(',')})`);
     if (t.cloud.upserts < 1) fail('after sign-in the local library was never pushed');
-    if (t.cloud.channels !== 1) fail(`the realtime channel must be subscribed exactly once (was ${t.cloud.channels})`);
+    if (t.cloud.channels !== 0) fail(`no realtime channel may be opened: app_state is not in the realtime publication, so it never fired (was ${t.cloud.channels})`);
 
     // 4. Unload flush carries the owner token, not the anon key.
     t.store.hype_audio = JSON.stringify([{ id: 'c1', title: 'edited', updated_at: 2 }]);

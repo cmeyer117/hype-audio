@@ -134,7 +134,9 @@
     const clips = listClips();
     const idx = clips.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    clips[idx] = Object.assign({}, clips[idx], { deleted: true, deleted_at: Date.now(), updated_at: Date.now() });
+    // A tombstone drops the heavy text (transcript_text was 168 KB of the 293 KB the deleted clips cost every sync write; audit 2026-11-20, hype-audio-3).
+    const { transcript_text, suggested_title, ...slim } = clips[idx]; // eslint-disable-line no-unused-vars
+    clips[idx] = Object.assign({}, slim, { deleted: true, deleted_at: Date.now(), updated_at: Date.now() });
     saveClips(clips);
   }
 

@@ -60,23 +60,25 @@ async function runRecovery() {
   const statuses = [];
   const writes = [];
   let failApply = true;
-  let realtimeCb = null;
+  const listeners = {}; // the realtime channel was removed (audit 2026-11-20, hype-audio-4): a retry now comes from the online/wake handlers
+  const fire = (t) => (listeners[t] || []).forEach((fn) => fn());
   const store = { hype_audio: JSON.stringify([{ id: 'l1', title: 'local clip', updated_at: 1 }]) };
   const remote1 = { hype_audio: [{ id: 'r1', title: 'remote clip', updated_at: 5 }] };
   const remote2 = { hype_audio: [{ id: 'r1', title: 'remote clip v2', updated_at: 9 }] };
+  let remoteNow = { data: remote1, updated_at: 't1' };
   const fakeSupa = {
     from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { data: remote1, updated_at: 't1' }, error: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: remoteNow, error: null }) }) }),
       update: (row) => { writes.push(row); return { eq: () => ({ eq: () => ({ select: () => Promise.resolve({ data: [{ updated_at: row.updated_at }], error: null }) }) }) }; },
       insert: (row) => { writes.push(row); return { select: () => Promise.resolve({ data: [{ updated_at: row.updated_at }], error: null }) }; },
     }),
-    channel: () => ({ on(t, f, cb) { realtimeCb = cb; return this; }, subscribe() { return this; } }),
+    channel: () => { throw new Error('the dead realtime channel must not be opened'); },
   };
   const sandbox = {
     window: {
       supabase: { createClient: () => fakeSupa },
       SUPABASE_CONFIG: { URL: 'https://selfcheck.invalid', KEY: 'selfcheck-key' },
-      addEventListener() {},
+      addEventListener(t, fn) { (listeners[t] = listeners[t] || []).push(fn); },
     },
     document: { addEventListener() {}, visibilityState: 'visible' },
     localStorage: {
@@ -106,14 +108,15 @@ async function runRecovery() {
   if (statuses.includes('synced')) fail(`status must not report synced while the remote apply is failing (saw: ${statuses.join(',')})`);
   if (statuses[statuses.length - 1] !== 'retrying') fail(`should still be retrying (saw: ${statuses.join(',')})`);
 
-  // Next realtime event: apply still failing -> still retrying, still no push.
-  realtimeCb({ new: { data: remote1, updated_at: 't1' } });
+  // Next retry (coming back online): apply still failing -> still retrying, still no push.
+  fire('online');
   await sleep(500);
   if (writes.length !== 0 || statuses[statuses.length - 1] !== 'retrying') fail('a repeated failing apply must keep retrying and not push');
 
-  // Store recovers; the next realtime event applies, clears applyFailed, and pushing resumes.
+  // Store recovers; the next retry pulls the newer row, applies it, clears applyFailed, and pushing resumes.
   failApply = false;
-  realtimeCb({ new: { data: remote2, updated_at: 't2' } });
+  remoteNow = { data: remote2, updated_at: 't2' };
+  fire('online');
   await sleep(900);
   if (!/remote clip v2/.test(store.hype_audio)) fail('a later successful apply should write the remote value');
   if (writes.length < 1) fail('pushing should resume after a successful apply');

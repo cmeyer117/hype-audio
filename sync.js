@@ -331,7 +331,6 @@
         }).then((resp) => { if (req.method === 'PATCH') return; if (resp.ok) { lastSyncedJson = json; lastSyncedAt = Date.now(); statusState.retrying = false; statusState.blocked = false; updateStatus(); } else if (resp.status === 401 || resp.status === 403) { statusState.blocked = true; updateStatus(); } }).catch(() => {});
       } catch (e) {}
     }
-    let channelSubscribed = false;
     // Bumped by every init() and by sign-out: an init whose generation is stale (a sign-out or a
     // newer init happened while it awaited) must not flip syncReady back on or apply remote data
     // (Codex review 2026-09-30: a sign-out during the initial SELECT was being undone).
@@ -379,21 +378,6 @@
         statusState.initFailed = true;
         updateStatus();
       }
-      if (!channelSubscribed) {
-        channelSubscribed = true;
-        supa.channel('app_state_' + appKey)
-          .on('postgres_changes', {
-            event: '*', schema: 'public', table: 'app_state', filter: 'key=eq.' + appKey,
-          }, (payload) => {
-            if (!payload.new || !payload.new.data) return;
-            const incoming = JSON.stringify(payload.new.data);
-            if (incoming === lastSyncedJson && !statusState.applyFailed) return; // failed apply: retry it
-            lastSyncedJson = incoming;
-            applyRemote(payload.new.data); // merged synchronously, so this version is now the one we have seen
-            if (payload.new.updated_at) cloudUpdatedAt = payload.new.updated_at;
-          })
-          .subscribe();
-      }
     }
     init();
     // Signing in later (the "Sign in to sync" prompt) starts sync without a reload;
@@ -419,9 +403,18 @@
     // visibilitychange -> 'hidden' fires reliably for that case and is the
     // recommended mobile-safe signal for "flush before we might not get
     // another chance."
+    // 2026-11-20 audit (hype-audio-4): the realtime subscription this app used to rely on was dead (app_state is not in the realtime publication, and
+    // adding it would fan a 666 KB payload out on every write), so a long-open tab never saw another device's change. A wake pull replaces it, throttled
+    // to once every 2 minutes, only when sync is ready and nothing is mid-flight (Row's resumePull has the same shape).
+    let lastWakePull = 0;
+    function wakePull() {
+      if (!syncReady || statusState.signedOut || Date.now() - lastWakePull < 2 * 60 * 1000) return;
+      lastWakePull = Date.now();
+      init();
+    }
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') flushOnUnload();
-      else retryInit();
+      else { retryInit(); wakePull(); }
     });
     window.addEventListener('storage', (e) => { if (e.key && matches(e.key)) schedulePush(); });
   };

@@ -407,9 +407,17 @@
     // adding it would fan a 666 KB payload out on every write), so a long-open tab never saw another device's change. A wake pull replaces it, throttled
     // to once every 2 minutes, only when sync is ready and nothing is mid-flight (Row's resumePull has the same shape).
     let lastWakePull = 0;
-    function wakePull() {
+    async function wakePull() {
       if (!syncReady || statusState.signedOut || Date.now() - lastWakePull < 2 * 60 * 1000) return;
       lastWakePull = Date.now();
+      // Ask for updated_at alone first: the whole row is about 700 KB, and most wakes find it unchanged (Row's resumePull does the same).
+      // A failed light read, an unknown version or a failed apply all fall through to the full pull.
+      if (cloudUpdatedAt && !statusState.applyFailed) {
+        try {
+          const { data, error } = await supa.from('app_state').select('updated_at').eq('key', appKey).maybeSingle();
+          if (!error && data && data.updated_at === cloudUpdatedAt) return;
+        } catch (e) { /* fall through to the full pull */ }
+      }
       init();
     }
     document.addEventListener('visibilitychange', () => {

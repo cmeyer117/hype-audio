@@ -67,6 +67,7 @@ HypeAudio.deleteClip('3');
 assertEqual(HypeAudio.listActiveClips().map((c) => c.id), ['1', '2', 'focus1', 'focus2', 'cue1'], 'deleted clip drops out of listActiveClips');
 assertEqual(HypeAudio.listClips().map((c) => c.id), ['1', '2', '3', 'focus1', 'focus2', 'cue1'], 'deleted clip stays in listClips as a tombstone, not removed');
 assertEqual(HypeAudio.listClips().find((c) => c.id === '3').deleted, true, 'tombstone is marked deleted:true');
+assertEqual(Object.keys(HypeAudio.listClips().find((c) => c.id === '3')).sort(), ['deleted', 'deleted_at', 'id', 'updated_at'], 'a tombstone keeps only id + delete marks (keep in step with the hype_audio slimming in sync.js mergeArrays)');
 assertEqual(HypeAudio.pickRandom({}).id === '3', false, 'pickRandom never returns a deleted clip');
 
 // migrateGogginsToMindset — splits Goggins-mentality iron clips into their own pillar

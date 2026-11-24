@@ -93,7 +93,11 @@
           byKey.set(key, { ...winner, play_count: other.play_count });
         } else if (entryWins) byKey.set(key, winner);
       }
-      return Array.from(byKey.values());
+      // Row diet 2026-11-24: a deleted clip is kept only as id + delete marks (hype-audio.js deleteClip writes the same four keys), so the merge
+      // that every pull runs also shrinks old full-record tombstones, and the slimmed row is pushed back by applyRemote's divergence check.
+      const slim = (e) => (keyName === 'hype_audio' && e && typeof e === 'object' && e.deleted === true
+        ? Object.fromEntries(['id', 'deleted', 'deleted_at', 'updated_at'].filter((f) => f in e).map((f) => [f, e[f]])) : e);
+      return Array.from(byKey.values(), slim);
     }
     function applyRemote(remote) {
       if (!remote || typeof remote !== 'object') return false;

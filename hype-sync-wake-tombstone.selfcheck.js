@@ -11,8 +11,8 @@ const read = (f) => fs.readFileSync(path.join(__dirname, f), 'utf8').replace(/\r
 const hype = read('hype-audio.js');
 const del = /function deleteClip\(id\) \{([\s\S]*?)\n  \}/.exec(hype);
 assert.ok(del, 'deleteClip found');
-assert.ok(/const \{ transcript_text, suggested_title, \.\.\.slim \} = clips\[idx\]/.test(del[1]), 'a tombstone drops transcript_text and suggested_title');
-assert.ok(/deleted: true, deleted_at: Date\.now\(\), updated_at: Date\.now\(\)/.test(del[1]), 'and is still stamped deleted, deleted_at and updated_at');
+// 2026-11-24 (improve pass, item 4): a tombstone is now ONLY id + delete marks (superseding the transcript-only drop); hype-audio.selfcheck.js asserts the key set.
+assert.ok(/\{ id: clips\[idx\]\.id, deleted: true, deleted_at: Date\.now\(\), updated_at: Date\.now\(\) \}/.test(del[1]), 'a tombstone keeps only id and the deleted, deleted_at and updated_at marks');
 
 const sync = read('sync.js');
 assert.ok(!/postgres_changes/.test(sync) && !/\.channel\(/.test(sync), 'the dead realtime channel is gone');

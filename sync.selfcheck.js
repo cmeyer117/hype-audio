@@ -139,3 +139,17 @@ assertEqual(mergeArrays([editedClip], [playedClip], 'hype_audio'), [combinedClip
 assertEqual(mergeArrays([playedClip], [editedClip], 'hype_audio'), [combinedClip], 'cue merge is independent of delivery direction');
 
 console.log('sync.selfcheck.js: all assertions passed');
+
+// Row diet (improve pass 2026-11-24, item 4): a deleted clip is kept only as id + delete marks. 265 tombstones carried their full record,
+// 47% of a 708 KB row that every sync write sends and every full pull downloads. The merge slims them, so one device's pull shrinks the row
+// for all of them (a slimmed copy that differs from the remote's makes the apply push it back). Live clips and other keys are untouched.
+{
+  const full = { id: 'd1', title: 'Old', url: 'https://x/y.mp3', pillar: 'iron', transcript_text: 'words', duration: 12, deleted: true, deleted_at: 5, updated_at: 7 };
+  const slim = { id: 'd1', deleted: true, deleted_at: 5, updated_at: 7 };
+  const live = { id: 'l1', title: 'Live', url: 'https://x/z.mp3', updated_at: 9 };
+  assertEqual(mergeArrays([full, live], [full], 'hype_audio'), [slim, live], 'a tombstone is slimmed to id + delete marks, a live clip is untouched');
+  assertEqual(mergeArrays([slim], [full], 'hype_audio'), [slim], 'a slim remote tombstone beats a full local one at the same time (the slim copy spreads)');
+  assertEqual(mergeArrays([full], [full], 'other_key'), [full], 'only the hype_audio key is slimmed');
+  assertEqual(mergeArrays([{ id: 'd2', deleted: true }], [], 'hype_audio'), [{ id: 'd2', deleted: true }], 'a tombstone with no times is not given any');
+  assertEqual(mergeArrays([full], [{ id: 'd1', title: 'Old', updated_at: 8 }], 'hype_audio'), [slim], 'a tombstone still beats a newer live edit, as before, and comes out slim');
+}

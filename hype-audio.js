@@ -130,9 +130,9 @@
     const clips = listClips();
     const idx = clips.findIndex((c) => c.id === id);
     if (idx === -1) return;
-    // A tombstone drops the heavy text (transcript_text was 168 KB of the 293 KB the deleted clips cost every sync write; audit 2026-11-20, hype-audio-3).
-    const { transcript_text, suggested_title, ...slim } = clips[idx]; // eslint-disable-line no-unused-vars
-    clips[idx] = Object.assign({}, slim, { deleted: true, deleted_at: Date.now(), updated_at: Date.now() });
+    // A tombstone keeps only id + delete marks: the full records of 265 deleted clips were 47% of a 708 KB row that every sync write sends
+    // (audit 2026-11-20 dropped the transcript; improve pass 2026-11-24 drops the rest). sync.js mergeArrays slims old ones the same way.
+    clips[idx] = { id: clips[idx].id, deleted: true, deleted_at: Date.now(), updated_at: Date.now() };
     saveClips(clips);
   }
 

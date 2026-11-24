@@ -43,7 +43,7 @@ const ids = (r) => r.map((c) => c.id).sort();
 
   // a failed read changes nothing and is retried on the next call
   let calls = 0; let mode = 'error';
-  global.window = { HypeAuth: { getClient: () => ({ from: (t) => ({ select: () => ({ eq: (col, key) => ({ maybeSingle: async () => {
+  global.window = { HypeAuth: { getClient: () => ({ from: (t) => ({ select: () => ({ eq: (col, key) => ({ abortSignal() { return this; }, maybeSingle: async () => {
     calls++;
     if (t !== 'app_state' || key !== 'hype-audio:transcripts') throw new Error('wrong table or key: ' + t + ' ' + key);
     return mode === 'error' ? { data: null, error: { code: '42501' } } : { data: { data: SIDE }, error: null };

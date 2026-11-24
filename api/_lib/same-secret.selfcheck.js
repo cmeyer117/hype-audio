@@ -16,9 +16,20 @@ const { pathToFileURL } = require('node:url');
   assert.equal(sameSecret('', ''), false, 'an empty secret never matches');
 
   for (const f of ['upload-clip.mjs', 'create-content-idea.mjs']) {
-    const src = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-    assert.match(src, /sameSecret\(req\.headers\['x-upload-secret'\], secret\)/, `${f} must use sameSecret`);
-    assert.doesNotMatch(src, /\['x-upload-secret'\] !== secret/, `${f} still compares with !==`);
+    // Exercise the actual route with a synthetic secret and a database constructor that must
+    // never be reached. This covers helper refactors without pinning an inline function call.
+    const routePath = path.join(__dirname, '..', f);
+    const src = fs.readFileSync(routePath, 'utf8')
+      .replace(/^import \{ createClient \} from '@supabase\/supabase-js'.*$/m,
+        'const createClient = () => { throw new Error("unauthorized request reached the database") };')
+      .replace('process.env.HYPE_AUDIO_UPLOAD_SECRET', JSON.stringify('abc123'))
+      .replace(/from '(\.\/[^']+)'/g, (_match, relative) => "from '" + pathToFileURL(path.resolve(path.dirname(routePath), relative)).href + "'");
+    const { default: handler } = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
+    for (const given of [undefined, 'wrong', 'abc', ['abc123']]) {
+      const res = { code: 0, status(code) { this.code = code; return this; }, json() {} };
+      await handler({ method: 'POST', headers: { 'x-upload-secret': given }, body: {} }, res);
+      assert.equal(res.code, 401, f + ' refuses an invalid passphrase before any database use');
+    }
   }
   console.log('PASS: upload passphrase compared in constant time on both endpoints');
 })().catch((e) => { console.error(e.message); process.exit(1); });

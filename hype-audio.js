@@ -222,18 +222,22 @@
     if (sideTranscripts) return Promise.resolve(true);
     if (sideTranscriptsLoad) return sideTranscriptsLoad;
     if (sideFailedAt && Date.now() - sideFailedAt < SIDE_RETRY_MS) return Promise.resolve(false);
-    const p = (async function () {
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise(resolve => { timer = setTimeout(function () { controller.abort(); resolve(false); }, 8000); });
+    const work = (async function () {
       try {
         const client = typeof window !== 'undefined' && window.HypeAuth && await window.HypeAuth.getClient();
-        if (!client) return false;
-        const res = await client.from('app_state').select('data').eq('key', SIDE_TRANSCRIPTS_KEY).maybeSingle();
-        if (!res || res.error || !res.data || !res.data.data || typeof res.data.data !== 'object') return false;
+        if (!client || controller.signal.aborted) return false;
+        const res = await client.from('app_state').select('data').eq('key', SIDE_TRANSCRIPTS_KEY).abortSignal(controller.signal).maybeSingle();
+        if (controller.signal.aborted || !res || res.error || !res.data || !res.data.data || typeof res.data.data !== 'object') return false;
         sideTranscripts = res.data.data;
         return true;
       } catch (e) { return false; }
     })();
+    const p = Promise.race([work, deadline]).finally(function () { clearTimeout(timer); });
     sideTranscriptsLoad = p;
-    p.then(function (ok) { sideFailedAt = ok ? 0 : Date.now(); if (sideTranscriptsLoad === p) sideTranscriptsLoad = null; });
+    p.then(function (ok) { if (sideTranscriptsLoad === p) { sideFailedAt = ok ? 0 : Date.now(); sideTranscriptsLoad = null; } });
     return p;
   }
 

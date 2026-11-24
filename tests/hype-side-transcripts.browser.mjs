@@ -21,7 +21,7 @@ async function fixture(browser,{refuse=false}={}){
   const url=new URL(route.request().url());
   if(url.hostname!=='hype.test'||url.pathname.startsWith('/api/'))return route.abort();
   if(url.pathname==='/sync.js')return route.fulfill({contentType:'application/javascript',body:'window.initCloudSync=opts=>{window.cloudFixture=opts;opts.onStatusChange("offline");};'});
-  if(url.pathname==='/hype-auth.js')return route.fulfill({contentType:'application/javascript',body:'window.HypeAuth={showLogin(){},onChange(){},status:async()=>"owner",getAccessToken:async()=>null,getClient(){return {from(t){return {select(){return {eq(c,k){return {maybeSingle:async()=>{window.sideReads=(window.sideReads||0)+1;return window.sideRefuse?{data:null,error:{code:"42501"}}:{data:{data:window.SIDE},error:null};}};}};}};}};}};'});
+  if(url.pathname==='/hype-auth.js')return route.fulfill({contentType:'application/javascript',body:'window.HypeAuth={showLogin(){},onChange(){},status:async()=>"owner",getAccessToken:async()=>null,getClient(){return {from(t){return {select(){return {eq(c,k){return {abortSignal(){return this;},maybeSingle:async()=>{window.sideReads=(window.sideReads||0)+1;return window.sideRefuse?{data:null,error:{code:"42501"}}:{data:{data:window.SIDE},error:null};}};}};}};}};}};'});
   const path=resolve(root,'.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
   if(!path.startsWith(root+sep))return route.abort();
   try{return route.fulfill({contentType:({'.html':'text/html','.js':'application/javascript','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'})[extname(path)]||'application/octet-stream',body:await readFile(path)});}catch{return route.abort();}

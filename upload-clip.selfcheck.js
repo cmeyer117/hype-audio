@@ -13,8 +13,8 @@ async function main() {
   assert.ok(importLine.test(src), 'expected supabase import line');
   src = src.replace(importLine, 'const createClient = globalThis.__fakeCreateClient;');
   // The source runs from a data: URL, which cannot resolve relative imports: point the helper import at its file.
-  const helper = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'same-secret.mjs')).href;
-  src = src.replace("'./_lib/same-secret.mjs'", `'${helper}'`);
+  const helper = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'upload-access.mjs')).href;
+  src = src.replace("'./_lib/upload-access.mjs'", `'${helper}'`);
   const recovery = require('url').pathToFileURL(path.join(__dirname, 'api', '_lib', 'upload-intents.mjs')).href;
   src = src.replace("'./_lib/upload-intents.mjs'", `'${recovery}'`);
 

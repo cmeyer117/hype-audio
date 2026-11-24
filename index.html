@@ -312,6 +312,8 @@
       <div class="moment-row" id="play-first-row"></div>
     </section>
     <button type="button" id="sync-status-indicator" disabled style="font-size:11px; color:var(--text-secondary); margin:-8px 0 12px;"></button>
+    <button type="button" id="retry-uploads">Retry unfinished uploads</button>
+    <span id="upload-recovery-status" role="status"></span>
     <input type="search" id="global-search-input" aria-label="Search everything you've said" placeholder="Search everything you've said..." style="width: 100%; margin-bottom: 16px; box-sizing: border-box;">
     <div id="global-search-results" style="display:none"></div>
     <button id="title-review-link" onclick="showTitleReview()" style="display:none; width:100%; margin-bottom:16px; padding:10px; border-radius:10px; border:1px solid rgba(255,193,7,0.3); background:rgba(255,193,7,0.08); color:#FFC107; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;"></button>
@@ -607,6 +609,27 @@
         el.textContent = text;
       },
     });
+
+    let recoveringUploads = false;
+    async function recoverUnfinishedUploads(ask) {
+      if (recoveringUploads) return;
+      recoveringUploads = true;
+      const status = document.getElementById('upload-recovery-status');
+      try {
+        const result = await HypeAudio.recoverUploads(ask);
+        status.textContent = result.pending ? result.pending + ' uploads awaiting confirmation. Keep the original files.' : '';
+        if (result.hasMore) status.textContent += ' More uploads remain. Retry unfinished uploads again.';
+        if (result.clips.length) {
+          renderHome();
+          if (currentMentality !== null) renderSection(currentPillar, currentMentality);
+        }
+      } catch (e) { status.textContent = 'Upload recovery unavailable. Retry when connected.'; }
+      finally { recoveringUploads = false; }
+    }
+    document.getElementById('retry-uploads').onclick = function () { recoverUnfinishedUploads(true); };
+    window.addEventListener('online', function () { recoverUnfinishedUploads(false); });
+    if (window.HypeAuth) window.HypeAuth.onChange(function (session) { if (session) recoverUnfinishedUploads(false); });
+    recoverUnfinishedUploads(false);
 
     let currentPillar = null;   // null = home, else a pillar key
     let currentMentality = null; // null = subcat screen, else inside a mentality's clip list
@@ -1463,10 +1486,13 @@
       const prevLabel = submitBtn.textContent;
       submitBtn.textContent = 'Uploading…';
       try {
-        const { url, error } = await HypeAudio.uploadClipFile(file);
-        if (!url) { alert(error || 'Upload failed.'); return false; }
-        HypeAudio.addClip({
-          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        const fingerprint = file.name + '|' + file.size + '|' + file.lastModified;
+        if (form.dataset.uploadFile !== fingerprint) {
+          form.dataset.uploadFile = fingerprint;
+          form.dataset.uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        }
+        const clip = {
+          id: form.dataset.uploadId,
           title: title,
           mentality: mentality,
           pillar: pillar,
@@ -1474,11 +1500,12 @@
           source_type: source,
           use_case: metadata.useCase || null,
           delivery_role: metadata.deliveryRole || null,
-          storage_url: url,
-          created_at: new Date().toISOString(),
-          play_count: 0,
-        });
+        };
+        const { url, error } = await HypeAudio.uploadClipFile(file, clip);
+        if (!url) { alert(error || 'Upload failed.'); return false; }
         form.reset();
+        delete form.dataset.uploadId;
+        delete form.dataset.uploadFile;
         return true;
       } finally {
         submitBtn.disabled = false;
@@ -1563,6 +1590,7 @@
       var mediaRecorder = null;
       var recordedChunks = [];
       var recordedBlob = null;
+      var recordedUploadId = null;
       var recordedUrl = null;
       var recordElapsedInterval = null;
       var recordStartedAt = 0;
@@ -1658,6 +1686,7 @@
         document.getElementById('record-cue-host').replaceChildren();
         if (recordedUrl) URL.revokeObjectURL(recordedUrl);
         recordedBlob = null;
+        recordedUploadId = null;
         recordedUrl = null;
         document.getElementById('record-preview').style.display = 'none';
         document.getElementById('record-save-form').style.display = 'none';
@@ -1678,12 +1707,10 @@
           // fall back to 'webm' rather than let split('/') produce a bad filename.
           const parts = (recordedBlob.type || '').split('/');
           const ext = (parts[1] || 'webm').split(';')[0] || 'webm';
-          const file = new File([recordedBlob], 'recording_' + Date.now() + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
-          const { url, error } = await HypeAudio.uploadClipFile(file);
-          if (!url) { alert(error || 'Upload failed.'); return; }
-          const newClipId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+          const newClipId = recordedUploadId || (recordedUploadId = Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+          const file = new File([recordedBlob], 'recording_' + newClipId + '.' + ext, { type: recordedBlob.type || 'audio/webm' });
           const cue = recordCue ? recordCue.getValue() : null;
-          HypeAudio.addClip({
+          const clip = {
             id: newClipId,
             title: document.getElementById('record-title-input').value.trim(),
             mentality: document.getElementById('record-mentality-input').value.trim().toLowerCase(),
@@ -1692,10 +1719,9 @@
             source_type: document.getElementById('record-source-input').value,
             use_case: document.getElementById('record-use-case-input').value || null,
             delivery_role: document.getElementById('record-delivery-role-input').value || null,
-            storage_url: url,
-            created_at: new Date().toISOString(),
-            play_count: 0,
-          });
+          };
+          const { url, error } = await HypeAudio.uploadClipFile(file, clip);
+          if (!url) { alert(error || 'Upload failed.'); return; }
           if (cue) HypeAudio.setClipCue(newClipId, cue);
           resetRecordUi();
           if (currentMentality !== null) renderSection(currentPillar, currentMentality);

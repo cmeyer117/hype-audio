@@ -1,10 +1,6 @@
 // Hype Audio — shared core logic (metadata list + Storage upload).
-// This repo is the canonical copy; Row's copy is re-synced from here by
-// hand whenever this file changes (Row doesn't use uploadClipFile --
-// gym.html only calls playMidSetHype/playPrRant -- but keeping it
-// byte-identical means the mini-player playback fixes always carry over
-// too). Row's sync.js is NOT kept in sync -- it has its own real
-// divergence for Row's owner-auth token handling. No build step, no bundler.
+// Row's row-hype.js is an independent fork. Apply shared playback fixes
+// separately; never copy this file over it. No build step, no bundler.
 (function () {
   'use strict';
   const LS_KEY = 'hype_audio';
@@ -1093,7 +1089,7 @@
   // Returns { url, error }. Two steps: /api/upload-clip validates the
   // passphrase and returns a one-time signed Storage upload URL, then the
   // raw file PUTs directly to Storage -- no base64, no Vercel body limit.
-  async function uploadClipFile(file) {
+  async function uploadClipFile(file, metadata) {
     var secret = getUploadSecret();
     if (!secret) return { url: null, error: 'Upload cancelled — no passphrase entered.' };
     // Neither the signed-URL flow nor the Storage bucket's file_size_limit
@@ -1103,37 +1099,73 @@
     if (file.size === 0) return { url: null, error: 'That file is empty.' };
     if (file.size > MAX_UPLOAD_BYTES) return { url: null, error: 'File too big — max 25MB for an audio clip.' };
 
-    var res;
+    var body;
     try {
-      res = await fetch('/api/upload-clip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
-        body: JSON.stringify({ filename: file.name, contentType: file.type || 'audio/webm' }),
+      body = await uploadAction(secret, {
+        filename: file.name, contentType: file.type || 'audio/webm', metadata: metadata,
       });
     } catch (e) {
-      return { url: null, error: 'Network error during upload.' };
-    }
-
-    var body = {};
-    try { body = await res.json(); } catch (e) {}
-
-    if (!res.ok) {
-      if (res.status === 401) clearUploadSecret();
-      return { url: null, error: body.error || ('Upload failed (' + res.status + ').') };
+      return { url: null, error: e.name === 'AbortError' ? 'Upload authorization timed out. Retry with this form.' : (e.message || 'Upload authorization failed.') };
     }
 
     var putRes;
+    var transfer = new AbortController();
+    var transferTimer = setTimeout(function () { transfer.abort(); }, 120000);
     try {
       putRes = await fetch(body.uploadUrl, {
-        method: 'PUT',
+        method: 'PUT', signal: transfer.signal,
         headers: { 'Content-Type': file.type || 'audio/webm' },
         body: file,
       });
     } catch (e) {
-      return { url: null, error: 'Network error during upload.' };
+      if (!metadata) return { url: null, error: 'Network error during upload.' };
+    } finally { clearTimeout(transferTimer); }
+    // A lost PUT response may still have stored the audio. Ask the server to
+    // confirm that object and its library entry before reporting success.
+    if (metadata) {
+      try {
+        var completion = await uploadAction(secret, { action: 'complete', uploadId: metadata.id });
+        if (completion.confirmed === true && completion.clip && completion.clip.id === metadata.id
+          && completion.clip.storage_url === body.publicUrl) {
+          rememberConfirmedClip(completion.clip);
+          return { url: body.publicUrl, clip: completion.clip, error: null };
+        }
+      } catch (e) {}
+      return { url: null, error: 'Audio is awaiting confirmation. Keep this form open and retry, or use Retry unfinished uploads.' };
     }
     if (!putRes.ok) return { url: null, error: 'Storage upload failed (' + putRes.status + ').' };
     return { url: body.publicUrl, error: null };
+  }
+
+  async function uploadAction(secret, data) {
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 20000);
+    try {
+      var res = await fetch('/api/upload-clip', {
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', 'x-upload-secret': secret },
+        body: JSON.stringify(data),
+      });
+      if (res.status === 401) clearUploadSecret();
+      var body = await res.json();
+      if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : ('Upload request failed (' + res.status + ').'));
+      return body;
+    } finally { clearTimeout(timer); }
+  }
+
+  function rememberConfirmedClip(clip) {
+    // Never overwrite a local edit or tombstone while recovering an old upload.
+    if (!listClips().some(function (item) { return item.id === clip.id; })) addClip(clip);
+  }
+
+  async function recoverUploads(ask) {
+    var secret;
+    try { secret = localStorage.getItem(UPLOAD_SECRET_KEY); } catch (e) {}
+    if (!secret && ask) secret = getUploadSecret();
+    if (!secret) return { clips: [], pending: 0 };
+    var result = await uploadAction(secret, { action: 'recover' });
+    (result.clips || []).forEach(rememberConfirmedClip);
+    return result;
   }
 
   // Returns { id, error }. Reuses the same stored passphrase uploadClipFile
@@ -1233,6 +1265,7 @@
       setArtworkResolver: setArtworkResolver,
       onPlaybackChange: onPlaybackChange,
       uploadClipFile: uploadClipFile,
+      recoverUploads: recoverUploads,
       sendToContentIdea: sendToContentIdea,
       migrateMentalityCasing: migrateMentalityCasing,
       migrateGogginsToMindset: migrateGogginsToMindset,
@@ -1304,6 +1337,7 @@
       hasPendingMentalityReview: hasPendingMentalityReview,
       confirmMentality: confirmMentality,
       uploadClipFile: uploadClipFile,
+      recoverUploads: recoverUploads,
       getPlaybackContext: getPlaybackContext,
       explainQueuePick: explainQueuePick,
       submitQueueFeedback: submitQueueFeedback,

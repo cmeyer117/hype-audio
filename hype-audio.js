@@ -196,7 +196,46 @@
     return eligible[Math.floor(Math.random() * eligible.length)];
   }
 
-  // Case-insensitive substring match across title + transcript_text. A
+  // Transcripts for the clips that have none in the synced row live in ONE side row, app_state key 'hype-audio:transcripts', keyed by the
+  // clip's storage file name: { "<file>.mp3": { t: text, d: seconds, l: LUFS, n: no-speech probability } }. Written by a local Whisper pass
+  // (2026-11-25) and kept out of the synced 'hype-audio' row so that row stays small. Loaded once, lazily, when search or the content-ideas
+  // review needs it; a failed load changes nothing (titles and in-row transcripts keep working) and is retried on the next call.
+  const SIDE_TRANSCRIPTS_KEY = 'hype-audio:transcripts';
+  const SIDE_NO_SPEECH_MAX = 0.6; // above this Whisper heard no speech, so its text is probably invented and is not used
+  let sideTranscripts = null, sideTranscriptsLoad = null;
+  function clipFileName(clip) {
+    const u = clip && clip.storage_url;
+    if (typeof u !== 'string') return '';
+    try { return decodeURIComponent(u.split('?')[0].split('/').pop()); } catch (e) { return ''; }
+  }
+  // The transcript for a clip: the row's own text first, else the side row's (unless Whisper flagged it as no speech), else ''.
+  function transcriptOf(clip) {
+    if (!clip) return '';
+    if (typeof clip.transcript_text === 'string' && clip.transcript_text.trim()) return clip.transcript_text;
+    const side = sideTranscripts && sideTranscripts[clipFileName(clip)];
+    return side && typeof side.t === 'string' && !(side.n > SIDE_NO_SPEECH_MAX) ? side.t : '';
+  }
+  function sideTranscriptsLoaded() { return !!sideTranscripts; }
+  // Resolves true once the side row is loaded, false when it could not be (no client, signed out, refused, offline). Never rejects.
+  function ensureSideTranscripts() {
+    if (sideTranscripts) return Promise.resolve(true);
+    if (sideTranscriptsLoad) return sideTranscriptsLoad;
+    const p = (async function () {
+      try {
+        const client = typeof window !== 'undefined' && window.HypeAuth && await window.HypeAuth.getClient();
+        if (!client) return false;
+        const res = await client.from('app_state').select('data').eq('key', SIDE_TRANSCRIPTS_KEY).maybeSingle();
+        if (!res || res.error || !res.data || !res.data.data || typeof res.data.data !== 'object') return false;
+        sideTranscripts = res.data.data;
+        return true;
+      } catch (e) { return false; }
+    })();
+    sideTranscriptsLoad = p;
+    p.then(function () { if (sideTranscriptsLoad === p) sideTranscriptsLoad = null; });
+    return p;
+  }
+
+  // Case-insensitive substring match across title + transcript (the row's own, or the side row's once loaded). A
   // personal library of ~1000 clips doesn't need fuzzy-search infra --
   // this is deliberately simple.
   function searchClips(query) {
@@ -204,7 +243,7 @@
     if (!q) return [];
     return listActiveClips().filter(function (c) {
       return (typeof c.title === 'string' && c.title.toLowerCase().indexOf(q) !== -1) ||
-             (typeof c.transcript_text === 'string' && c.transcript_text.toLowerCase().indexOf(q) !== -1);
+             transcriptOf(c).toLowerCase().indexOf(q) !== -1;
     });
   }
 
@@ -227,8 +266,8 @@
     // would otherwise silently get the 80-char default instead of an
     // empty/immediate truncation.
     if (typeof maxLen !== 'number') maxLen = 80;
-    if (typeof clip.transcript_text !== 'string' || !clip.transcript_text) return null;
-    const text = clip.transcript_text.trim();
+    const text = transcriptOf(clip).trim();
+    if (!text) return null;
     if (text.length <= maxLen) return text;
     const truncated = text.slice(0, maxLen).replace(/\s+\S*$/, '');
     return (truncated || text.slice(0, maxLen)) + '…';
@@ -840,7 +879,7 @@
   // docs/superpowers/specs/2026-08-17-rant-engine-design.md.
   function hasPendingContentIdea(clip) {
     return !!clip && clip.pillar === 'carl' &&
-      typeof clip.transcript_text === 'string' && clip.transcript_text.trim().length > 0 &&
+      transcriptOf(clip).trim().length > 0 &&
       clip.content_idea_sent !== true;
   }
 
@@ -1225,6 +1264,9 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       searchClips: searchClips,
+      transcriptOf: transcriptOf,
+      ensureSideTranscripts: ensureSideTranscripts,
+      sideTranscriptsLoaded: sideTranscriptsLoaded,
       resolveDeepLink: resolveDeepLink,
       quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,
@@ -1296,6 +1338,9 @@
       deleteClip: deleteClip,
       pickRandom: pickRandom,
       searchClips: searchClips,
+      transcriptOf: transcriptOf,
+      ensureSideTranscripts: ensureSideTranscripts,
+      sideTranscriptsLoaded: sideTranscriptsLoaded,
       resolveDeepLink: resolveDeepLink,
       quotePreview: quotePreview,
       pickMidSetClip: pickMidSetClip,

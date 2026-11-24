@@ -202,7 +202,8 @@
   // review needs it; a failed load changes nothing (titles and in-row transcripts keep working) and is retried on the next call.
   const SIDE_TRANSCRIPTS_KEY = 'hype-audio:transcripts';
   const SIDE_NO_SPEECH_MAX = 0.6; // above this Whisper heard no speech, so its text is probably invented and is not used
-  let sideTranscripts = null, sideTranscriptsLoad = null;
+  const SIDE_RETRY_MS = 30000; // after a failed read, wait this long before asking again (search calls ensureSideTranscripts on every keystroke)
+  let sideTranscripts = null, sideTranscriptsLoad = null, sideFailedAt = 0;
   function clipFileName(clip) {
     const u = clip && clip.storage_url;
     if (typeof u !== 'string') return '';
@@ -220,6 +221,7 @@
   function ensureSideTranscripts() {
     if (sideTranscripts) return Promise.resolve(true);
     if (sideTranscriptsLoad) return sideTranscriptsLoad;
+    if (sideFailedAt && Date.now() - sideFailedAt < SIDE_RETRY_MS) return Promise.resolve(false);
     const p = (async function () {
       try {
         const client = typeof window !== 'undefined' && window.HypeAuth && await window.HypeAuth.getClient();
@@ -231,7 +233,7 @@
       } catch (e) { return false; }
     })();
     sideTranscriptsLoad = p;
-    p.then(function () { if (sideTranscriptsLoad === p) sideTranscriptsLoad = null; });
+    p.then(function (ok) { sideFailedAt = ok ? 0 : Date.now(); if (sideTranscriptsLoad === p) sideTranscriptsLoad = null; });
     return p;
   }
 

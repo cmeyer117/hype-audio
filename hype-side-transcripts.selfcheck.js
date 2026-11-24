@@ -48,10 +48,17 @@ const ids = (r) => r.map((c) => c.id).sort();
     if (t !== 'app_state' || key !== 'hype-audio:transcripts') throw new Error('wrong table or key: ' + t + ' ' + key);
     return mode === 'error' ? { data: null, error: { code: '42501' } } : { data: { data: SIDE }, error: null };
   } }) }) }) }) } };
+  // search asks on every keystroke, so a failure backs off for 30 s; the clock is shimmed to step past it
+  const realNow = Date.now; let skew = 0; Date.now = () => realNow() + skew;
+  skew += 31000; // past the backoff left by the no-client call above
   assertEqual(await HypeAudio.ensureSideTranscripts(), false, 'a refused read resolves false');
   assertEqual(HypeAudio.sideTranscriptsLoaded(), false, 'still unloaded after a refusal');
+  const refusedCalls = calls;
   mode = 'ok';
-  assertEqual(await HypeAudio.ensureSideTranscripts(), true, 'the retry works');
+  assertEqual(await HypeAudio.ensureSideTranscripts(), false, 'right after a failure it does not ask again');
+  assertEqual(calls, refusedCalls, 'and makes no read');
+  skew += 31000;
+  assertEqual(await HypeAudio.ensureSideTranscripts(), true, 'after the backoff the retry works');
   assertEqual(HypeAudio.sideTranscriptsLoaded(), true, 'loaded');
   const afterLoad = calls;
   await HypeAudio.ensureSideTranscripts();

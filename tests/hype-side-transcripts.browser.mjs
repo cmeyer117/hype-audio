@@ -61,7 +61,7 @@ check('side-refused',async page=>{
  await page.locator('#global-search-input').fill('discipline');
  await page.waitForTimeout(400);
  assert.equal(await page.locator('.search-result').count(),0,'a refused side read finds nothing by transcript, and does not loop');
- assert.ok(await page.evaluate(()=>window.sideReads)<=3,'a refused read is not retried in a loop');
+ assert.equal(await page.evaluate(()=>window.sideReads),1,'a refused read backs off: two searches make one read, not one per keystroke');
 },{refuse:true});
 // HYPE_BROWSER_CHANNEL=chrome runs it in the installed Chrome when Playwright's own Chromium is not installed.
 const browser=await chromium.launch(process.env.HYPE_BROWSER_CHANNEL?{channel:process.env.HYPE_BROWSER_CHANNEL}:{});let failed=0;

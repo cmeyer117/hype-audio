@@ -8,7 +8,14 @@ export async function prepareUpload(db, id, objectName, metadata, publicUrl) {
   if (error && error.code !== '23505') throw new Error('Upload metadata intent could not be saved')
   if (error) {
     const existing = await db.from('app_state').select('data').eq('key', intentKey(id)).maybeSingle()
-    if (existing.error || existing.data?.data?.objectName !== objectName) throw new Error('Upload identity already exists')
+    if (existing.error) throw new Error('Upload metadata intent could not be checked')
+    const original = existing.data?.data
+    if (original?.objectName !== objectName || !original?.clip
+      || Object.keys(metadata).some(field => original.clip[field] !== metadata[field])) {
+      const conflict = new Error('Recover the original unfinished upload before changing its details')
+      conflict.code = 'UPLOAD_IDENTITY_CONFLICT'
+      throw conflict
+    }
   }
 }
 

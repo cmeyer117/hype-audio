@@ -22,6 +22,10 @@ async function main() {
   globalThis.__fakeCreateClient = function (url, key) {
     fake.created.push([url, key]);
     return {
+      from: () => ({
+        insert: async () => ({ error: { code: '23505' } }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: fake.intent, error: null }) }) }),
+      }),
       storage: {
         from: function (bucket) {
           fake.buckets.push(bucket);
@@ -93,6 +97,12 @@ async function main() {
     reset();
     fake.pub = function () { return {}; };
     assert.equal((await call('POST', auth, good)).code, 502, 'no public url -> 502');
+    reset();
+    fake.intent = { data: { objectName: 'clip_retry_My_Clip__1_.mp3', clip: { id: 'retry', title: 'Original' } } };
+    const changed = await call('POST', auth, { ...good, metadata: { id: 'retry', title: 'Edited before retry' } });
+    assert.equal(changed.code, 409, 'changed retry details require reconciliation, never another authorization');
+    assert.match(changed.body.error, /recover/i);
+    assert.equal(fake.names.length, 0, 'no signed upload URL is issued for the changed operation');
   } finally {
     console.error = origError;
     if (priorSecret === undefined) delete process.env.HYPE_AUDIO_UPLOAD_SECRET; else process.env.HYPE_AUDIO_UPLOAD_SECRET = priorSecret;

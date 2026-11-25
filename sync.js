@@ -132,6 +132,7 @@
                 if (!applyFailLogged) {
                   applyFailLogged = true;
                   console.error('hype sync: could not apply remote state for ' + k, e);
+                  report(e, 'sync:apply');
                 }
                 statusState.applyFailed = true;
                 updateStatus();
@@ -208,6 +209,7 @@
     const statusState = { initFailed: false, pushInFlight: false, retrying: false, blocked: false, signedOut: false, applyFailed: false };
     let lastSyncedAt = null;
     const onStatusChange = config && config.onStatusChange;
+    function report(e, where) { try { if (window.HypeSentry) window.HypeSentry.report(e, where); } catch (_) {} }
     function updateStatus() {
       if (typeof onStatusChange === 'function') {
         try { onStatusChange(computeSyncStatus(statusState), lastSyncedAt); } catch (e) {}
@@ -269,6 +271,7 @@
         return;
       }
       statusState.blocked = isPermissionError(error, status);
+      if (!statusState.retrying) report(error, 'sync:push'); // one event per retry streak
       statusState.retrying = true;
       updateStatus();
       // Route the retry/fallback timer through pushTimer (not a bare

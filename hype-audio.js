@@ -1131,6 +1131,12 @@
   // video by accident", not a transport constraint.
   var MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+  // A failed upload reaches Sentry; the user's own mistakes (no passphrase, empty or huge file) do not.
+  function reportUpload(message) {
+    try { if (window.HypeSentry) window.HypeSentry.report(message, 'upload'); } catch (e) {}
+    return { url: null, error: message };
+  }
+
   // Returns { url, error }. Two steps: /api/upload-clip validates the
   // passphrase and returns a one-time signed Storage upload URL, then the
   // raw file PUTs directly to Storage -- no base64, no Vercel body limit.
@@ -1150,7 +1156,7 @@
         filename: file.name, contentType: file.type || 'audio/webm', metadata: metadata,
       });
     } catch (e) {
-      return { url: null, error: e.name === 'AbortError' ? 'Upload authorization timed out. Retry with this form.' : (e.message || 'Upload authorization failed.') };
+      return reportUpload(e.name === 'AbortError' ? 'Upload authorization timed out. Retry with this form.' : (e.message || 'Upload authorization failed.'));
     }
 
     var putRes;
@@ -1163,7 +1169,7 @@
         body: file,
       });
     } catch (e) {
-      if (!metadata) return { url: null, error: 'Network error during upload.' };
+      if (!metadata) return reportUpload('Network error during upload.');
     } finally { clearTimeout(transferTimer); }
     // A lost PUT response may still have stored the audio. Ask the server to
     // confirm that object and its library entry before reporting success.
@@ -1176,9 +1182,9 @@
           return { url: body.publicUrl, clip: completion.clip, error: null };
         }
       } catch (e) {}
-      return { url: null, error: 'Audio is awaiting confirmation. Keep this form open and retry, or use Retry unfinished uploads.' };
+      return reportUpload('Audio is awaiting confirmation. Keep this form open and retry, or use Retry unfinished uploads.');
     }
-    if (!putRes.ok) return { url: null, error: 'Storage upload failed (' + putRes.status + ').' };
+    if (!putRes.ok) return reportUpload('Storage upload failed (' + putRes.status + ').');
     return { url: body.publicUrl, error: null };
   }
 

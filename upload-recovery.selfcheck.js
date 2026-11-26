@@ -8,7 +8,7 @@ async function main() {
   const db = {
     storage: { from: () => ({ list: async (_folder, options) => ({ data: objects.has(options.search) ? [{ name: options.search, metadata: { size: 10 } }] : [] }) }) },
     from() {
-      let key, changes, expected, prefix, phase, limit;
+      let key, changes, expected, prefix, phase, limit, inserting = false;
       const q = {
         select() { return q; },
         eq(field, value) { if (field === 'key') key = value; if (field === 'updated_at') expected = value; if (field === 'data->>phase') phase = value; return q; },
@@ -17,10 +17,11 @@ async function main() {
         limit(value) { limit = value; return q; },
         is(field) { if (field === 'updated_at') expected = null; return q; },
         maybeSingle: async () => ({ data: rows.get(key) ?? null }),
-        insert(row) { key = row.key; changes = row; return q; },
+        insert(row) { key = row.key; changes = row; inserting = true; return q; },
         update(row) { changes = row; return q; },
         then(resolve, reject) {
           if (prefix) return Promise.resolve({ data: [...rows.values()].filter(row => row.key.startsWith(prefix) && row.data.phase === phase).slice(0, limit) }).then(resolve, reject);
+          if (inserting && rows.has(key)) return Promise.resolve({ data: null, error: { code: '23505' } }).then(resolve, reject);
           if (key === 'hype-audio' && rejectLibraryWrite) return Promise.resolve({ error: { message: 'synthetic denial' } }).then(resolve, reject);
           if (expected !== undefined && rows.get(key)?.updated_at !== expected) return Promise.resolve({ data: [] }).then(resolve, reject);
           if (phase && rows.get(key)?.data?.phase !== phase) return Promise.resolve({ data: [] }).then(resolve, reject);
@@ -35,6 +36,10 @@ async function main() {
   const metadata = { id: 'fixture-upload', title: 'Fixture recording', pillar: 'carl' };
   await prepareUpload(db, metadata.id, 'fixture.webm', metadata, 'https://fixture.invalid/fixture.webm');
   assert.equal(rows.has('hype:upload:fixture-upload'), true);
+  await prepareUpload(db, metadata.id, 'fixture.webm', metadata, 'https://fixture.invalid/fixture.webm');
+  await assert.rejects(prepareUpload(db, metadata.id, 'fixture.webm', { ...metadata, title: 'Edited before retry' }, 'https://fixture.invalid/fixture.webm'),
+    error => error.code === 'UPLOAD_IDENTITY_CONFLICT', 'a changed retry cannot silently confirm the old title and clear the new draft');
+  assert.equal(rows.get('hype:upload:fixture-upload').data.clip.title, metadata.title, 'retain the original operation for reconciliation');
   assert.equal((await completeUpload(db, metadata.id)).confirmed, false);
   objects.add('fixture.webm');
   await assert.rejects(completeUpload(db, metadata.id), /metadata/);

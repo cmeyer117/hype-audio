@@ -81,7 +81,10 @@ export default async function handler(req, res) {
   if (!pub?.publicUrl) return res.status(502).json({ error: 'Could not resolve public URL' })
   if (clip) {
     try { await prepareUpload(supabase, clip.id, objectName, clip, pub.publicUrl) }
-    catch { return res.status(503).json({ error: 'Could not save upload recovery metadata' }) }
+    catch (error) {
+      if (error?.code === 'UPLOAD_IDENTITY_CONFLICT') return res.status(409).json({ error: 'Recover the original unfinished upload before changing its details.' })
+      return res.status(503).json({ error: 'Could not save upload recovery metadata' })
+    }
   }
   const { data, error } = await supabase.storage
     .from(BUCKET)

@@ -9,3 +9,5 @@ scripts
 tests
 .claude
 .github
+# Git line-ending config, not part of the site.
+.gitattributes

@@ -1182,7 +1182,10 @@
           return { url: body.publicUrl, clip: completion.clip, error: null };
         }
       } catch (e) {}
-      return reportUpload('Audio is awaiting confirmation. Keep this form open and retry, or use Retry unfinished uploads.');
+      // Confirmation is checked first: a retry of an already stored object also gets a rejected PUT.
+      return reportUpload(putRes && !putRes.ok
+        ? 'Storage upload failed (' + putRes.status + '). Keep this form open and retry.'
+        : 'Audio is awaiting confirmation. Keep this form open and retry, or use Retry unfinished uploads.');
     }
     if (!putRes.ok) return reportUpload('Storage upload failed (' + putRes.status + ').');
     return { url: body.publicUrl, error: null };
